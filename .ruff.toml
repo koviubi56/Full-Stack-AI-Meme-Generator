@@ -1,0 +1,55 @@
+ignore = [
+    "BLE001",
+    "C",
+    "COM812",
+    "D",
+    "EM101",
+    "EM102",
+    "FA102",
+    "FBT",
+    "T",
+    "TRY",
+    "PLR0911",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+]
+select = ["ALL"]
+line-length = 79
+target-version = "py38"
+
+fixable = [
+    "F632",
+    "E711",
+    "F901",
+    "E703",
+    "E712",
+    "E713",
+    "E714",
+    "W291",
+    "W292",
+    "W293",
+    "I001",
+    "PT001",
+    "PT003",
+    "PT006",
+    "PT009",
+    "PT023",
+    "Q",
+    "RSE102",
+    "SIM101",
+    "SIM103",
+    "SIM109",
+    "SIM112",
+    "SIM117",
+    "SIM118",
+    "SIM201",
+    "SIM202",
+    "SIM208",
+    "SIM210",
+    "SIM211",
+    "SIM212",
+]
+
+[flake8-quotes]
+inline-quotes = "double"

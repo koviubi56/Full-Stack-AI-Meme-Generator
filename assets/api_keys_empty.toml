@@ -17,10 +17,10 @@
 #     - ClipDrop has a separate website and API. ClipDrop has additional image processing tools and the website is more beginner friendly.
 #
 
-[Keys]
+[keys]
 
-OpenAI = 
+openai = ""
 
-ClipDrop = 
+clipdrop = ""
 
-StabilityAI = 
+stabilityai = ""
