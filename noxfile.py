@@ -25,7 +25,8 @@ def test_coverage(session: nox.Session) -> None:
     session.run(
         "pytest",
         "--codecov",
-        "-n auto",
+        "-n",
+        "auto",
         "--ff",
         "-vv",
         "-r",
