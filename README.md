@@ -2,7 +2,7 @@
 
 #### Allows you to automatically generate meme images from start to finish using AI. It will generate the text for the meme (optionally based on a user-provided concept), create a related image, and combine the two into a final image file.
 ----------------------
-<p align="center"><img src="https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/assets/12518330/2d8ee7cc-a7d3-40ca-a894-64e10085db14" width=35%></p>
+!["When you've been up all night coding and your AI meme generator only creates dad jokes." An image of a man sitting in front of a computer.](https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/assets/12518330/2d8ee7cc-a7d3-40ca-a894-64e10085db14)
 
 ## Features
 
@@ -16,7 +16,7 @@
 
 1. For Python Version Only: Clone the repository & Install the necessary packages.
 2. Obtain at least an OpenAI API key, but it is recommended to also use APIs from Clipdrop or Stability AI (DreamStudio) for the image generation stage.
-3. Edit the settings variables in the settings.ini file.
+3. Edit the settings variables in the settings.toml file.
 4. Run the script and enter a meme subject or concept when prompted (optional).
 
 ## Settings
@@ -29,9 +29,9 @@ Various settings for the meme generation process can be customized:
 - Special Image Instructions: You can tell the AI how to generate the image itself (more specifically,  how to write the image prompt). You can specify a style such as being a photograph, drawing, etc, or something more specific such as always using cats in the pictures.
 
 ## Example Image Output With Log
-<p align="center"><img src="https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/assets/12518330/6400c973-f7af-45ed-a6ad-c062c2be0b64" width="400"></p>
+!["When you finally find the perfect napping spot... on the laptop." An image of a cat laying on a laptop.](https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/assets/12518330/6400c973-f7af-45ed-a6ad-c062c2be0b64)
 
-```
+```text
 Meme File Name: meme_2023-07-13-15-34_ZYKCV.png
 AI Basic Instructions: You will create funny memes.
 AI Special Image Instructions: The images should be photographic.
@@ -42,33 +42,35 @@ Image Generation Platform: clipdrop
 ```
 
 ## Optional Arguments
-### You can also pass options into the program via command-line arguments whether using the python version or exe version.
 
-#### • API Key Arguments: Not necessary if the keys are already in api_keys.ini
-`--openaikey`: OpenAI API key.
+You can also pass options into the program via command-line arguments whether using the python version or exe version.
 
-`--clipdropkey`: ClipDrop API key.
+### API Key Arguments: Not necessary if the keys are already in api_keys.toml
 
-`--stabilitykey`: Stability AI API key.
+- `--openaikey`: OpenAI API key.
 
-#### • Basic Meme Arguments
+- `--clipdropkey`: ClipDrop API key.
 
-`--userprompt`: A meme subject or concept to send to the chat bot. If not specified, the user will be prompted to enter a subject or concept.
+- `--stabilitykey`: Stability AI API key.
 
-`--memecount`: The number of memes to create. If using arguments and not specified, the default is 1.
+### Basic Meme Arguments
 
-#### • Advanced Meme Settings Arguments
+- `--userprompt`: A meme subject or concept to send to the chat bot. If not specified, the user will be prompted to enter a subject or concept.
 
-`--imageplatform`: The image platform to use. If using arguments and not specified, the default is 'clipdrop'. Possible options: 'openai', 'stability', 'clipdrop'.
+- `--memecount`: The number of memes to create. If using arguments and not specified, the default is 1.
 
-`--temperature`: The temperature to use for the chat bot. If using arguments and not specified, the default is 1.0.
+### Advanced Meme Settings Arguments
 
-`--basicinstructions`: The basic instructions to use for the chat bot. If using arguments and not specified, the default is "You will create funny memes that are clever and original, and not cliche or lame.".
+- `--imageplatform`: The image platform to use. If using arguments and not specified, the default is 'clipdrop'. Possible options: 'openai', 'stability', 'clipdrop'.
 
-`--imagespecialinstructions`: The image special instructions to use for the chat bot. The default is "The images should be photographic.".
+- `--temperature`: The temperature to use for the chat bot. If using arguments and not specified, the default is 1.0.
 
-#### • Binary arguments: Just adding them activates them, no text needs to accompany them
+- `--basicinstructions`: The basic instructions to use for the chat bot. If using arguments and not specified, the default is "You will create funny memes that are clever and original, and not cliche or lame.".
 
-`--nouserinput`: If specified, this will prevent any user input prompts, and will instead use default values or other arguments.
+- `--imagespecialinstructions`: The image special instructions to use for the chat bot. The default is "The images should be photographic.".
 
-`--nofilesave`: If specified, the meme will not be saved to a file, and only returned as virtual file part of memeResultsDictsList.
+### Binary arguments: Just adding them activates them, no text needs to accompany them
+
+- `--nouserinput`: If specified, this will prevent any user input prompts, and will instead use default values or other arguments.
+
+- `--nofilesave`: If specified, the meme will not be saved to a file, and only returned as virtual file part of memeResultsDictsList.
