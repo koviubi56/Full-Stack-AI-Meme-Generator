@@ -1,0 +1,31 @@
+name: Lemming
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  lemming:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@main
+        with:
+          egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+      - uses: actions/checkout@main
+      - uses: actions/cache@main
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip
+      - name: Set up Python 3.11
+        uses: actions/setup-python@main
+        with:
+          python-version: "3.11"
+      - name: Install Lemming
+        run: |
+          python -m pip install -U python-lemming
+      - name: Run lemming
+        run: |
+          python -m lemming check -v .
