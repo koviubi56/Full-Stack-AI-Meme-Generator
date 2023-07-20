@@ -40,14 +40,13 @@ import shutil
 import sys
 import textwrap
 import traceback
-from typing import Iterable, Literal, NamedTuple, TypedDict
+from typing import Iterable, NamedTuple, TypedDict
 
 import openai
 import requests
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 from openai.error import RateLimitError
 from PIL import Image, ImageDraw, ImageFont
-from pkg_resources import parse_version
 from stability_sdk import client
 
 try:
@@ -65,11 +64,30 @@ DEFAULT_API_KEYS_FILE_NAME = "api_keys_empty.toml"
 
 
 class MemeDict(TypedDict):
+    """
+    A dictionary containing the meme's text and image prompt.
+
+    Args:
+        meme_text (str): The meme's text.
+        image_prompt (str): The image prompt.
+    """
+
     meme_text: str
     image_prompt: str
 
 
-class ApiKeys(NamedTuple):
+class APIKeys(NamedTuple):
+    """
+    The API keys.
+
+    Args:
+        openai_key (str): OpenAI API key.
+        clipdrop_key (str | None, optional): ClipDrop API key. Defaults to
+        None.
+        stability_key (str | None, optional): Stability API key. Defaults to
+        None.
+    """
+
     openai_key: str
     clipdrop_key: str | None
     stability_key: str | None
@@ -134,6 +152,16 @@ parser.add_argument(
 def search_for_file(
     directory: pathlib.Path, file_name: str
 ) -> pathlib.Path | None:
+    """
+    Search for the file `file_name` within `directory`.
+
+    Args:
+        directory (pathlib.Path): The directory to search in.
+        file_name (str): The file's name to look for.
+
+    Returns:
+        pathlib.Path | None: The first file that matched `file_name` or None.
+    """
     try:
         return next(directory.rglob(file_name))
     except StopIteration:
@@ -143,6 +171,16 @@ def search_for_file(
 def search_for_file_in_directories(
     directories: Iterable[pathlib.Path], file_name: str
 ) -> pathlib.Path | None:
+    """
+    Search for the file `file_name` within `directories`.
+
+    Args:
+        directories (Iterable[pathlib.Path]): The directories to search in.
+        file_name (str): The file's name to look for.
+
+    Returns:
+        pathlib.Path | None: The first file that matched `file_name` or None.
+    """
     for directory in directories:
         file = search_for_file(directory, file_name)
         if file:
@@ -150,19 +188,25 @@ def search_for_file_in_directories(
     return None
 
 
-def check_font(font_file: str) -> pathlib.Path:
+def check_font(font_file_name: str) -> pathlib.Path:
     """
-    Check for font file in current directory, then check for font file in
-    Fonts folder, warn user and exit if not found
+    Check for font file in current directory, then check for font file in Fonts
+    folder, warn user and exit if not found.
+
+    Args:
+        font_file_name (str): The font file's name.
+
+    Returns:
+        pathlib.Path: The font file.
     """
     # Check for font file in current directory
-    path = pathlib.Path(font_file)
+    path = pathlib.Path(font_file_name)
     if path.exists():
         return path
 
     if platform.system() == "Windows":
         # Check for font file in Fonts folder (Windows)
-        file = pathlib.Path(os.environ["WINDIR"], "Fonts", font_file)
+        file = pathlib.Path(os.environ["WINDIR"], "Fonts", font_file_name)
     elif platform.system() == "Linux":
         # Check for font file in font directories (Linux)
         font_directories = [
@@ -171,7 +215,7 @@ def check_font(font_file: str) -> pathlib.Path:
             pathlib.Path("~/.local/share/fonts").expanduser(),
             pathlib.Path("/usr/local/share/fonts"),
         ]
-        file = search_for_file_in_directories(font_directories, font_file)
+        file = search_for_file_in_directories(font_directories, font_file_name)
     elif (
         platform.system() == "Darwin"
     ):  # Darwin is the underlying system for macOS
@@ -180,16 +224,17 @@ def check_font(font_file: str) -> pathlib.Path:
             pathlib.Path("/Library/Fonts"),
             pathlib.Path("~/Library/Fonts").expanduser(),
         ]
-        file = search_for_file_in_directories(font_directories, font_file)
+        file = search_for_file_in_directories(font_directories, font_file_name)
     else:
         file = None
 
     # Warn user and exit if not found
     if (file is None) or (not file.exists()):
         print(
-            f'\n  ERROR:  Font file "{font_file}" not found. Please add the'
-            " font file to the same folder as this script. Or set the variable"
-            " above to the name of a font file in the system font folder."
+            f'\n  ERROR:  Font file "{font_file_name}" not found. Please add'
+            " the font file to the same folder as this script. Or set the"
+            " variable above to the name of a font file in the system font"
+            " folder."
         )
         input("\nPress Enter to exit...")
         sys.exit()
@@ -197,19 +242,44 @@ def check_font(font_file: str) -> pathlib.Path:
     return file
 
 
-def get_config(config_file: pathlib.Path) -> dict[str, str | float | bool]:
-    """Returns a dictionary of the config file"""
+def get_config(
+    config_file: pathlib.Path,
+) -> dict[str, dict[str, str | float | bool]]:
+    """
+    Returns a dictionary of the config file.
+
+    Args:
+        config_file (pathlib.Path): The config file.
+
+    Returns:
+        dict[str, dict[str | float | bool]]: The settings read from the file.
+    """
     with config_file.open("rb") as file:
         return tomllib.load(file)
 
 
 def get_assets_file(file_name: str) -> pathlib.Path:
+    """
+    Get `assets/file_name`
+
+    Args:
+        file_name (str): The file's name.
+
+    Returns:
+        pathlib.Path: The asset file.
+    """
     if hasattr(sys, "_MEIPASS"):  # If running as a pyinstaller bundle
         return pathlib.Path(sys._MEIPASS, file_name)
     return pathlib.Path("assets", file_name)
 
 
 def get_settings() -> dict[str, dict[str, str | float | bool]]:
+    """
+    Get the settings. Create the file if it doesn't exist.
+
+    Returns:
+        dict[str, dict[str, str | float | bool]]: The settings.
+    """
     file = pathlib.Path(SETTINGS_FILE_NAME)
 
     if not file.exists():
@@ -243,8 +313,17 @@ def get_settings() -> dict[str, dict[str, str | float | bool]]:
     return settings
 
 
-# Get API key constants from config file or command line arguments
-def get_api_keys(args: argparse.Namespace | None = None) -> ApiKeys:
+def get_api_keys(args: argparse.Namespace | None = None) -> APIKeys:
+    """
+    Get API key constants from config file or command line arguments.
+
+    Args:
+        args (argparse.Namespace | None, optional): The command line
+        namespace. Defaults to None.
+
+    Returns:
+        APIKeys: The API keys.
+    """
     # Checks if api_keys.toml file exists, if not create empty one from default
     file = pathlib.Path(API_KEYS_FILE_NAME)
     if not file.exists():
@@ -282,16 +361,23 @@ def get_api_keys(args: argparse.Namespace | None = None) -> ApiKeys:
             args.stabilitykey if args.stabilitykey else stability_key
         )
 
-    return ApiKeys(openai_key, clipdrop_key, stability_key)
+    return APIKeys(openai_key, clipdrop_key, stability_key)
 
 
 # ------------ VALIDATION ------------
 
 
 def validate_api_keys(
-    api_keys: ApiKeys,
+    api_keys: APIKeys,
     image_platform: str,
 ) -> None:
+    """
+    Validate `api_keys`.
+
+    Args:
+        api_keys (APIKeys): The API keys.
+        image_platform (str): The image platform to use.
+    """
     if not api_keys.openai_key:
         print(
             "\n  ERROR:  No OpenAI API key found. OpenAI API key is required"
@@ -330,8 +416,20 @@ def validate_api_keys(
 
 
 def initialize_api_clients(
-    api_keys: ApiKeys, image_platform: str
+    api_keys: APIKeys, image_platform: str
 ) -> client.StabilityInference | None:
+    """
+    Initialize the API clients.
+
+    Args:
+        api_keys (APIKeys): The API keys.
+        image_platform (str): The image platform to use.
+
+    Returns:
+        client.StabilityInference | None: If the stability API key is provided
+        and the image platform is stability, return the stability interface,
+        otherwise None.
+    """
     if api_keys.openai_key:
         openai.api_key = api_keys.openai_key
 
@@ -347,10 +445,19 @@ def initialize_api_clients(
 # ================================== Functions ================================
 
 
-# Sets the name and path of the file to be used
 def set_file_path(
     base_name: str, output_directory: pathlib.Path
 ) -> pathlib.Path:
+    """
+    Sets the name and path of the file to be used.
+
+    Args:
+        base_name (str): The base name for the file.
+        output_directory (pathlib.Path): The directory to put the file in.
+
+    Returns:
+        pathlib.Path: The new file.
+    """
     # Generate a timestamp string to append to the file name
     timestamp = datetime.datetime.now().strftime("%f")  # noqa: DTZ005
 
@@ -360,8 +467,6 @@ def set_file_path(
     return pathlib.Path(output_directory, f"{base_name}_{timestamp}.png")
 
 
-# Write or append log file containing the user user message, chat bot meme
-# text, and chat bot image prompt for each meme
 def write_log_file(
     user_prompt: str,
     ai_meme_dict: MemeDict,
@@ -371,6 +476,19 @@ def write_log_file(
     special: str,
     platform: str,
 ) -> None:
+    """
+    Write or append log file containing the user user message, chat bot meme
+    text, and chat bot image prompt for each meme.
+
+    Args:
+        user_prompt (str): The user prompt.
+        ai_meme_dict (MemeDict): The AI meme dictionary.
+        file (pathlib.Path): The meme file.
+        log_directory (pathlib.Path): The log directory.
+        basic (str): The basic AI instruction.
+        special (str): The special AI instruction.
+        platform (str): The image generation platform.
+    """
     # Get file name from path
     meme_file_name = file.name
     with log_directory.joinpath("log.txt").open(
@@ -394,7 +512,16 @@ def write_log_file(
 def construct_system_prompt(
     basic_instructions: str, image_special_instructions: str
 ) -> str:
-    """Construct the system prompt for the chat bot."""
+    """
+    Construct the system prompt for the chat bot.
+
+    Args:
+        basic_instructions (str): The basic AI instructions.
+        image_special_instructions (str): The special AI instructions.
+
+    Returns:
+        str: The system prompt.
+    """
     format_instructions = (
         "You are a meme generator with the following formatting instructions."
         " Each meme will consist of text that will appear at the top, and an"
@@ -420,7 +547,7 @@ def construct_system_prompt(
         " creating the memes. Interpret as best as possible:"
         f" {basic_instructions} | "
     )
-    special_instructions_ippend = (
+    special_instructions_append = (
         "Next are any special instructions for the image prompt. For example,"
         ' if the instructions are "the images should be photographic style",'
         ' your prompt may append ", photograph" at the end, or begin with'
@@ -431,14 +558,20 @@ def construct_system_prompt(
     return (
         format_instructions
         + basic_instruction_append
-        + special_instructions_ippend
+        + special_instructions_append
     )
 
 
 def parse_meme(message: str) -> MemeDict | None:
     """
     Gets the meme text and image prompt from the message sent by the chat
-    bot
+    bot.
+
+    Args:
+        message (str): The AI message.
+
+    Returns:
+        MemeDict | None: The meme dictionary or None.
     """
     # The regex pattern to match
     pattern = r"Meme Text: (\"(.*?)\"|(.*?))\n*\s*Image Prompt: (.*?)$"
@@ -456,13 +589,25 @@ def parse_meme(message: str) -> MemeDict | None:
     return None
 
 
-# Sends the user message to the chat bot and returns the chat bot's response
 def send_and_receive_message(
     text_model: str,
     user_message: str,
     conversation_temp: list[dict[str, str]],
     temperature: float = 0.5,
 ) -> str:
+    """
+    Sends the user message to the chat bot and returns the chat bot's response.
+
+    Args:
+        text_model (str): The text model to use.
+        user_message (str): The user message.
+        conversation_temp (list[dict[str, str]]): Messages.
+        temperature (float, optional): The temperature (randomness). Defaults
+        to 0.5.
+
+    Returns:
+        str: The AI's response
+    """
     # Prepare to send request along with context by appending user message to
     # previous conversation
     conversation_temp.append({"role": "user", "content": user_message})
@@ -494,6 +639,23 @@ def create_meme(
     buffer_scale: float = 0.03,
     font_scale: float = 1,
 ) -> io.BytesIO:
+    """
+    Create the meme image.
+
+    Args:
+        image_path (io.BytesIO): The virtual image file.
+        top_text (str): Top text.
+        file_path (pathlib.Path): The file to write the image to.
+        font_file (pathlib.Path): The font file.
+        no_file_save (bool, optional): Don't save the file to `file_path`.
+        Defaults to False.
+        min_scale (float, optional): Minimum scale. Defaults to 0.05.
+        buffer_scale (float, optional): Buffer scale. Defaults to 0.03.
+        font_scale (float, optional): Font scale. Defaults to 1.
+
+    Returns:
+        io.BytesIO: The virtual image file.
+    """
     print("Creating meme image...")
 
     # Load the image. Can be a path or a file-like object such as IO.BytesIO
@@ -582,11 +744,30 @@ def create_meme(
 
 
 def image_generation_request(
-    api_keys: ApiKeys,
+    api_keys: APIKeys,
     image_prompt: str,
     platform: str,
     stability_api: client.StabilityInference | None = None,
 ) -> io.BytesIO:
+    """
+    Create the image.
+
+    Args:
+        api_keys (APIKeys): The API keys.
+        image_prompt (str): The image platform to use.
+        platform (str): The platform to use.
+        stability_api (client.StabilityInference | None, optional): The
+        stability interface. Defaults to None.
+
+    Raises:
+        ValueError: If `platform == stability` and `not stability_api`
+        ValueError: If the request activated the API's safety filters
+        ValueError: If `platform` is invalid.
+        Exception: If there was some unknown error.
+
+    Returns:
+        io.BytesIO: The virtual image file.
+    """
     if platform == "openai":
         openai_response = openai.Image.create(
             prompt=image_prompt,
@@ -657,9 +838,6 @@ def image_generation_request(
 # ==================== RUN ====================
 
 
-# Set default values for parameters to those at top of script, but can be
-# overridden by command line arguments or by being set when called from another
-# script
 def generate(
     text_model: str = "gpt-4",
     temperature: float = 1.0,
@@ -669,7 +847,7 @@ def generate(
     user_entered_prompt: str = "anything",
     meme_count: int = 1,
     image_platform: str = "openai",
-    font_file: str = "arial.ttf",
+    font_file_name: str = "arial.ttf",
     base_file_name: str = "meme",
     output_folder: pathlib.Path = pathlib.Path("Outputs"),
     openai_key: str | None = None,
@@ -678,6 +856,53 @@ def generate(
     no_user_input: bool = False,
     no_file_save: bool = False,
 ) -> list[dict[str, str | pathlib.Path]]:
+    """
+    Generate the memes.
+
+    Args:
+        text_model (str, optional): The text model to use. Defaults to "gpt-4".
+        temperature (float, optional): The temperature (randomness). Defaults
+        to 1.0.
+        basic_instructions (str, optional): The basic instructions. Defaults
+        to "You will create funny memes that are clever and"" original, and not
+        cliche or lame.".
+        image_special_instructions (str, optional): The image special
+        instructions. Defaults to "The images should be photographic.".
+        user_entered_prompt (str, optional): The user entered prompt. Defaults
+        to "anything".
+        meme_count (int, optional): The amount of memes to generate. Defaults
+        to 1.
+        image_platform (str, optional): The image platform to use. Must be one
+        of "openai", "stability", and "clipdrop". Defaults to "openai".
+        font_file_name (str, optional): The font file's name to use. Defaults
+        to "arial.ttf".
+        base_file_name (str, optional): The base file name for the images.
+        Defaults to "meme".
+        output_folder (pathlib.Path, optional): The directory to put the images
+        into. Defaults to pathlib.Path("Outputs").
+        openai_key (str | None, optional): The OpenAI API key. Defaults to
+        None.
+        stability_key (str | None, optional): The stability API key. Defaults
+        to None.
+        clipdrop_key (str | None, optional): The clipdrop API key. Defaults to
+        None.
+        no_user_input (bool, optional): Don't ask for user input. Defaults to
+        False.
+        no_file_save (bool, optional): Don't save the files. Defaults to False.
+
+    Returns:
+        list[dict[str, str | pathlib.Path]]: The list of the meme dictionaries.
+        Its length may be less than `meme_count` if some memes were skipped due
+        to errors. Syntax:
+        ```py
+        {
+            "meme_text": str,
+            "image_prompt": str,
+            "virtual_meme_file": io.BytesIO,
+            "file": pathlib.Path,
+        }
+        ```
+    """
     # Load default settings from settings.toml file. Will be overridden by
     # command line arguments, or ignored if Use_This_Config is set to False
     settings = get_settings()
@@ -700,7 +925,9 @@ def generate(
         image_platform = settings.get("ai_settings", {}).get(
             "image_platform", image_platform
         )
-        font_file = settings.get("advanced", {}).get("font_file", font_file)
+        font_file_name = settings.get("advanced", {}).get(
+            "font_file", font_file_name
+        )
         base_file_name = settings.get("advanced", {}).get(
             "base_file_name", base_file_name
         )
@@ -714,7 +941,7 @@ def generate(
     # If API Keys not provided as parameters, get them from config file or
     # command line arguments
     if openai_key:
-        api_keys = ApiKeys(openai_key, clipdrop_key, stability_key)
+        api_keys = APIKeys(openai_key, clipdrop_key, stability_key)
     else:
         api_keys = get_api_keys(args=args)
 
@@ -746,7 +973,7 @@ def generate(
     conversation = [{"role": "system", "content": system_prompt}]
 
     # Get full path of font file from font file name
-    font_file = check_font(font_file)
+    font_file_name = check_font(font_file_name)
 
     # Clear console
     os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
@@ -821,7 +1048,7 @@ def generate(
             meme_text,
             file,
             no_file_save=no_file_save,
-            font_file=font_file,
+            font_file=font_file_name,
         )
         if not no_file_save:
             # Write the user message, meme text, and image prompt to a log file
