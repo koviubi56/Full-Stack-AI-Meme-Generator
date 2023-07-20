@@ -16,7 +16,12 @@ def test_coverage(session: nox.Session) -> None:
     dotenv.load_dotenv()
     session.install("-U", "pip", "setuptools", "wheel")
     session.install(
-        "-U", "pytest-xdist", "pytest-randomly", "pytest-codecov[git]"
+        "-U",
+        "-r",
+        "requirements.txt",
+        "pytest-xdist",
+        "pytest-randomly",
+        "pytest-codecov[git]",
     )
     try:
         env = {"CODECOV_TOKEN": os.environ["CODECOV_TOKEN"]}
@@ -42,7 +47,9 @@ def test_coverage(session: nox.Session) -> None:
 @nox.session(python=PYTHON_VERSIONS)
 def test(session: nox.Session) -> None:
     session.install("-U", "pip", "setuptools", "wheel")
-    session.install("-U", "-e", ".", "pytest-xdist", "pytest-randomly")
+    session.install(
+        "-U", "-r", "requirements.txt", "pytest-xdist", "pytest-randomly"
+    )
     session.run(
         "pytest",
         "-n auto",
