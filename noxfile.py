@@ -1,4 +1,6 @@
 import os
+import sys
+from typing import Any, Callable, Mapping, TypeVar
 
 import dotenv
 import nox
@@ -7,7 +9,17 @@ import nox
 # run `test`, because `test_coverage` also uploads to CodeCov
 nox.options.sessions = ["test"]
 
+T = TypeVar("T")
 PYTHON_VERSIONS = ["3.8", "3.9", "3.10", "3.11"]
+
+
+def get_or_else(
+    mapping: Mapping[T, Any], key: T, or_else: Callable[[], T]
+) -> T:
+    try:
+        return mapping[key]
+    except KeyError:
+        return or_else()
 
 
 @nox.session(python=PYTHON_VERSIONS)
@@ -21,10 +33,9 @@ def test_coverage(session: nox.Session) -> None:
         "pytest-randomly",
         "pytest-codecov[git]",
     )
-    lst = list(os.environ.keys())
-    lst.sort(key=lambda elem: int(elem[0].encode(encoding="utf-8").hex(), 16))
-    raise RuntimeError(lst)
-    env = {"CODECOV_TOKEN": os.environ["CODECOV_TOKEN"]}
+    env = {
+        "CODECOV_TOKEN": os.environ.get("CODECOV_TOKEN", sys.argv[-1]),
+    }
     session.run(
         "pytest",
         "--codecov",
