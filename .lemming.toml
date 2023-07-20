@@ -1,0 +1,13 @@
+[[formatters]]
+packages = ["black"]
+format_command = "{pyexe} -m black -l 79 {path}"
+check_command = "{pyexe} -m black -l 79 --check --extend-exclude .*venv.* {path}"
+
+[[formatters]]
+packages = ["ruff"]
+format_command = "{pyexe} -m ruff check --show-source --fix -n {path}"
+check_command = "{pyexe} -m ruff check --show-source --show-fixes -n {path}"
+
+[[linters]]
+packages = ["vermin"]
+command = "vermin --target=3.6 --eval-annotations --backport argparse --backport dataclasses --backport typing -vv AIMemeGenerator.py"

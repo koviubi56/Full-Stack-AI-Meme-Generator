@@ -7,5 +7,5 @@
 - [X] Make separate objects (dataclass or pydantic) instead of tuples and dicts
 - [X] Better log messages
 - [X] Make compatible with multiple python versions
-- [ ] Lemming
+- [X] Lemming
 - [ ] Add tests (w/ mocking)
