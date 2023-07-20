@@ -78,9 +78,9 @@ def do_test_generate(
     pathlib.Path(tmp_path, AIMemeGenerator.API_KEYS_FILE_NAME).write_text(
         f"""
 [keys]
-openai = "{api_keys.openai_key if api_keys.openai_key else ''}"
-clipdrop = "{api_keys.clipdrop_key if api_keys.clipdrop_key else ''}"
-stabilityai = "{api_keys.stability_key if api_keys.stability_key else ''}"
+openai = "{api_keys.openai_key if api_keys.openai_key else 'null'}"
+clipdrop = "{api_keys.clipdrop_key if api_keys.clipdrop_key else 'null'}"
+stabilityai = "{api_keys.stability_key if api_keys.stability_key else 'null'}"
 """,
         encoding="utf-8",
     )
