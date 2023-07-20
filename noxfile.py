@@ -15,6 +15,7 @@ PYTHON_VERSIONS = ["3.7", "3.8", "3.9", "3.10", "3.11"]
 def test_coverage(session: nox.Session) -> None:
     dotenv.load_dotenv()
     session.install("-U", "pip", "setuptools", "wheel")
+    session.run("ls -lah")
     session.install(
         "-U",
         "-r",
