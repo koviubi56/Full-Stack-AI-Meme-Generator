@@ -75,6 +75,15 @@ def do_test_generate(
 ) -> None:
     font = get_font()
     monkeypatch.chdir(tmp_path)
+    pathlib.Path(tmp_path, AIMemeGenerator.API_KEYS_FILE_NAME).write_text(
+        f"""
+[keys]
+openai = "{api_keys.openai_key if api_keys.openai_key else ''}"
+clipdrop = "{api_keys.clipdrop_key if api_keys.clipdrop_key else ''}"
+stabilityai = "{api_keys.stability_key if api_keys.stability_key else ''}"
+""",
+        encoding="utf-8",
+    )
     with monkeypatch.context() as monkey:
         mock_init = Mock(side_effect=mock_initialize_api_clients)
         monkey.setattr(AIMemeGenerator, "initialize_api_clients", mock_init)
@@ -101,9 +110,6 @@ def do_test_generate(
 
         memes = AIMemeGenerator.generate(
             output_folder=pathlib.Path.cwd().resolve(),
-            openai_key=api_keys.openai_key,
-            clipdrop_key=api_keys.clipdrop_key,
-            stability_key=api_keys.stability_key,
             image_platform=image_platform,
             no_user_input=True,
             font_file_name=str(font),
@@ -141,9 +147,11 @@ Image Generation Platform: {image_platform}
 
 """
     )
-    assert pathlib.Path(tmp_path, "settings.toml").read_text(
-        encoding="utf-8"
-    ) == mock_get_assets_file("settings_default.toml").read_text(
+    assert pathlib.Path(
+        tmp_path, AIMemeGenerator.SETTINGS_FILE_NAME
+    ).read_text(encoding="utf-8") == mock_get_assets_file(
+        AIMemeGenerator.DEFAULT_SETTINGS_FILE_NAME
+    ).read_text(
         encoding="utf-8"
     )
 
@@ -175,7 +183,9 @@ Image Generation Platform: {image_platform}
             api_keys, IMAGE_PROMPT, image_platform, None
         )
     mock_file.assert_called_once_with("meme", tmp_path.resolve())
-    mock_asset.assert_called_once_with("settings_default.toml")
+    mock_asset.assert_called_once_with(
+        AIMemeGenerator.DEFAULT_SETTINGS_FILE_NAME
+    )
 
 
 def test_generate_only_openai(
