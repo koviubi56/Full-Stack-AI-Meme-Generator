@@ -21,7 +21,9 @@ def test_coverage(session: nox.Session) -> None:
         "pytest-randomly",
         "pytest-codecov[git]",
     )
-    raise RuntimeError(list(os.environ.keys()))
+    lst = list(os.environ.keys())
+    lst.sort(key=lambda elem: int(elem[0].encode(encoding="utf-8")))
+    raise RuntimeError(lst)
     env = {"CODECOV_TOKEN": os.environ["CODECOV_TOKEN"]}
     session.run(
         "pytest",
