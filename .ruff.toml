@@ -20,8 +20,7 @@ ignore = [
 per-file-ignores = { "test_*.py" = ["S101"] }
 select = ["ALL"]
 line-length = 79
-# theoretically it supports 3.6, but that's invalid here
-target-version = "py37"
+target-version = "py38"
 
 fixable = [
     "F632",

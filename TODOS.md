@@ -8,4 +8,4 @@
 - [X] Better log messages
 - [X] Make compatible with multiple python versions
 - [X] Lemming
-- [ ] Add tests (w/ mocking)
+- [X] Add tests (w/ mocking)

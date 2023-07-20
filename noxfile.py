@@ -7,8 +7,7 @@ import nox
 # run `test`, because `test_coverage` also uploads to CodeCov
 nox.options.sessions = ["test"]
 
-# 3.6 is not supported on ubuntu 22.04
-PYTHON_VERSIONS = ["3.7", "3.8", "3.9", "3.10", "3.11"]
+PYTHON_VERSIONS = ["3.8", "3.9", "3.10", "3.11"]
 
 
 @nox.session(python=PYTHON_VERSIONS)
