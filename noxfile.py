@@ -27,13 +27,13 @@ def test_coverage(session: nox.Session) -> None:
     dotenv.load_dotenv()
     session.install("-U", "pip", "setuptools", "wheel")
     session.install(
-        "-U",
-        "-r",
-        "requirements.txt",
-        "pytest-randomly",
+        "-U", "-r", "requirements.txt", "pytest-randomly", "coverage"
     )
     codecov_token = os.environ.get("CODECOV_TOKEN", sys.argv[-1])
     session.run(
+        "coverage",
+        "run",
+        "-m",
         "pytest",
         "--ff",
         "-vv",
@@ -44,11 +44,15 @@ def test_coverage(session: nox.Session) -> None:
         "--code-highlight=yes",
         "--continue-on-collection-errors",
     )
-    session.run(
-        "curl", "-O", "-s", "https://uploader.codecov.io/latest/linux/codecov"
-    )
-    session.run("chmod", "+x", "codecov")
-    session.run("./codecov", env={"CODECOV_TOKEN": codecov_token})
+    if os.name != "nt":
+        session.run(
+            "curl",
+            "-O",
+            "-s",
+            "https://uploader.codecov.io/latest/linux/codecov",
+        )
+        session.run("chmod", "+x", "codecov")
+        session.run("./codecov", env={"CODECOV_TOKEN": codecov_token})
 
 
 @nox.session(python=PYTHON_VERSIONS)
