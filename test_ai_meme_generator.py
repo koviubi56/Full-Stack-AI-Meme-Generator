@@ -1,0 +1,175 @@
+"""
+Test the AI meme generator.
+
+Copyright (C) 2023  Koviubi56
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+# SPDX-License-Identifier: GPL-3.0-or-later
+import io
+import pathlib
+import sys
+from typing import Any, Optional
+from unittest.mock import Mock
+
+import pytest
+
+import AIMemeGenerator
+
+MEME_TEXT = "When the H"
+IMAGE_PROMPT = "The letter H"
+AI_RESPONSE = f"Meme Text: {MEME_TEXT}\nImage Prompt: {IMAGE_PROMPT}"
+TEST_IMAGE = pathlib.Path(__file__, "..", "test_image.png")
+TEST_FULL_MEME = pathlib.Path(__file__, "..", "test_full_meme.png")
+
+
+def mock_initialize_api_clients(
+    api_keys: AIMemeGenerator.APIKeys, image_platform: str
+) -> Optional[Any]:
+    if api_keys.stability_key and image_platform.lower() == "stability":
+        return object()
+    return None
+
+
+def mock_set_file_path(
+    base_name: str, output_directory: pathlib.Path
+) -> pathlib.Path:
+    return pathlib.Path(output_directory, f"{base_name}.png")
+
+
+def mock_get_assets_file(file_name: str) -> pathlib.Path:
+    return pathlib.Path(__file__, "..", "assets", file_name).resolve()
+
+
+def do_test_generate(
+    *,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    api_keys: AIMemeGenerator.APIKeys,
+    image_platform: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as monkey:
+        mock_init = Mock(side_effect=mock_initialize_api_clients)
+        monkey.setattr(AIMemeGenerator, "initialize_api_clients", mock_init)
+        mock_message = Mock(return_value=AI_RESPONSE)
+        monkey.setattr(
+            AIMemeGenerator, "send_and_receive_message", mock_message
+        )
+        mock_image = Mock(return_value=io.BytesIO(TEST_IMAGE.read_bytes()))
+        monkey.setattr(AIMemeGenerator, "image_generation_request", mock_image)
+        mock_file = Mock(side_effect=mock_set_file_path)
+        monkey.setattr(AIMemeGenerator, "set_file_path", mock_file)
+        mock_asset = Mock(side_effect=mock_get_assets_file)
+        monkey.setattr(AIMemeGenerator, "get_assets_file", mock_asset)
+        mock_sys_argv = []
+        monkey.setattr(sys, "argv", mock_sys_argv)
+
+        memes = AIMemeGenerator.generate(
+            output_folder=pathlib.Path.cwd().resolve(),
+            openai_key=api_keys.openai_key,
+            clipdrop_key=api_keys.clipdrop_key,
+            stability_key=api_keys.stability_key,
+            image_platform=image_platform,
+            no_user_input=True,
+        )
+
+    # Check output
+    assert len(memes) == 1
+    assert memes[0].meme_text == MEME_TEXT
+    assert memes[0].image_prompt == IMAGE_PROMPT
+    assert memes[0].virtual_meme_file.getvalue() == TEST_FULL_MEME.read_bytes()
+    assert memes[0].file == pathlib.Path(tmp_path, "meme.png")
+    assert (
+        pathlib.Path(tmp_path, "log.txt").read_text(encoding="utf-8")
+        == f"""
+Meme File Name: meme.png
+AI Basic Instructions: You will create funny memes that are clever and\
+ original, and not cliche or lame.
+AI Special Image Instructions: The images should be photographic.
+User Prompt: 'anything'
+Chat Bot Meme Text: When the H
+Chat Bot Image Prompt: The letter H
+Image Generation Platform: {image_platform}
+
+"""
+    )
+    assert pathlib.Path(tmp_path, "settings.toml").read_text(
+        encoding="utf-8"
+    ) == mock_get_assets_file("settings_default.toml").read_text(
+        encoding="utf-8"
+    )
+
+    # Check mocks
+    mock_init.assert_called_once_with(api_keys, image_platform)
+    mock_message.assert_called_once_with(
+        "gpt-4",
+        "anything",
+        [
+            {
+                "role": "system",
+                "content": AIMemeGenerator.construct_system_prompt(
+                    "You will create funny memes that are clever and original,"
+                    " and not cliche or lame.",
+                    "The images should be photographic.",
+                ),
+            }
+        ],
+        1.0,
+    )
+    if image_platform == "stability":
+        mock_image.assert_called_once()
+        assert len(mock_image.call_args_list[0].args) == 4  # noqa: PLR2004
+        assert mock_image.call_args_list[0].args[0] == api_keys
+        assert mock_image.call_args_list[0].args[1] == IMAGE_PROMPT
+        assert type(mock_image.call_args_list[0].args[3]) is object
+    else:
+        mock_image.assert_called_once_with(
+            api_keys, IMAGE_PROMPT, image_platform, None
+        )
+    mock_file.assert_called_once_with("meme", tmp_path)
+    mock_asset.assert_called_once_with("settings_default.toml")
+
+
+def test_generate_only_openai(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    do_test_generate(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        image_platform="openai",
+        api_keys=AIMemeGenerator.APIKeys("openai", None, None),
+    )
+
+
+def test_generate_openai_plus_clipdrop(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    do_test_generate(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        image_platform="clipdrop",
+        api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
+    )
+
+
+def test_generate_openai_plus_stability(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    do_test_generate(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        image_platform="stability",
+        api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
+    )

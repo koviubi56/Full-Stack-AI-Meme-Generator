@@ -1,10 +1,13 @@
 ignore = [
+    "ANN101",
+    "ANN401",
     "BLE001",
     "C",
     "COM812",
     "D",
     "EM101",
     "EM102",
+    "EXE",
     "FA",
     "FBT",
     "T",
@@ -14,6 +17,7 @@ ignore = [
     "PLR0913",
     "PLR0915",
 ]
+per-file-ignores = { "test_*.py" = ["S101"] }
 select = ["ALL"]
 line-length = 79
 # theoretically it supports 3.6, but that's invalid here

@@ -296,13 +296,16 @@ def get_assets_file(file_name: str) -> pathlib.Path:
         pathlib.Path: The asset file.
     """
     if hasattr(sys, "_MEIPASS"):  # If running as a pyinstaller bundle
-        return pathlib.Path(sys._MEIPASS, file_name)  # noqa: SLF001
-    return pathlib.Path("assets", file_name)
+        return pathlib.Path(sys._MEIPASS, file_name).resolve()  # noqa: SLF001
+    return pathlib.Path("assets", file_name).resolve()
 
 
-def get_settings() -> Dict[str, Dict[str, Any]]:
+def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     """
     Get the settings. Create the file if it doesn't exist.
+
+    Args:
+        no_user_input (bool): Don't ask for user input
 
     Returns:
         Dict[str, Dict[str, Any]]: The settings.
@@ -319,7 +322,8 @@ def get_settings() -> Dict[str, Dict[str, Any]]:
             " forward to change more advanced settings if you want.",
             "cyan",
         )
-        input("Press Enter to continue...")
+        if not no_user_input:
+            input("Press Enter to continue...")
 
     # Try to get settings file, if fails, use default settings
     try:
@@ -631,7 +635,7 @@ def send_and_receive_message(
     text_model: str,
     user_message: str,
     conversation_temp: List[Dict[str, str]],
-    temperature: float = 0.5,
+    temperature: float = 1.0,
 ) -> str:
     """
     Sends the user message to the chat bot and returns the chat bot's response.
@@ -641,7 +645,7 @@ def send_and_receive_message(
         user_message (str): The user message.
         conversation_temp (List[Dict[str, str]]): Messages.
         temperature (float, optional): The temperature (randomness). Defaults
-        to 0.5.
+        to 1.0.
 
     Returns:
         str: The AI's response
@@ -952,7 +956,7 @@ This is free software, and you are welcome to redistribute it
 under certain conditions.
 """
     )
-    settings = get_settings()
+    settings = get_settings(no_user_input)
     use_config = settings.get(
         "use_this_config", False
     )  # If set to False, will ignore the settings.toml file
