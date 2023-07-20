@@ -22,10 +22,11 @@ jobs:
 
       - uses: actions/checkout@main
       # Python 3.6 is not supported on ubuntu 22.04
-      # - name: Set up Python 3.6
-      #   uses: actions/setup-python@main
-      #   with:
-      #     python-version: "3.6"
+      - if: matrix.os == 'windows-latest'
+        name: Set up Python 3.6
+        uses: actions/setup-python@main
+        with:
+          python-version: "3.6"
       - name: Set up Python 3.7
         uses: actions/setup-python@main
         with:
