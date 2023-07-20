@@ -60,51 +60,6 @@ API_KEYS_FILE_NAME = "api_keys.toml"
 DEFAULT_API_KEYS_FILE_NAME = "api_keys_empty.toml"
 
 
-# Get settings
-
-# --------------------------------- Settings ----------------------------------
-# Settings for OpenAI API to generate text to be used as the meme text and
-# image prompt
-
-# Some model examples: "gpt-4", "gpt-3.5-turbo-16k"
-TEXT_MODEL = "gpt-4"
-
-# Controls randomness. Lowering results in less random completions. Higher
-# temperature results in more random completions.
-TEMPERATURE = 1
-
-# Image Platform settings
-# Possible options: "openai", "stability", "clipdrop"
-IMAGE_PLATFORM = "clipdrop"
-
-# This is NOT the individual meme image prompt. Here you can change this to
-# tell it the general style or qualities to apply to all memes, such as using
-# dark humor, surreal humor, wholesome, etc.
-BASIC_INSTRUCTIONS = (
-    "You will create funny memes that are clever and original, and not cliche"
-    " or lame."
-)
-# You can use this to tell it how to generate the image itself. You can specify
-# a style such as being a photograph, drawing, etc, or something more specific
-# such as always use cats in the pictures.
-IMAGE_SPECIAL_INSTRUCTIONS = "The images should be photographic."
-
-# ----------------------------- Advanced Settings -----------------------------
-
-# The font to use for the meme text. Must be a TrueType font file (.ttf). Must
-# either be put in the current folder, or already be in your system's default
-# font directory. The script currently checks the "C:\Windows\Fonts folder" on
-# Windows, and several directories on Linux and MacOS.
-# See: https://learn.microsoft.com/en-us/typography/fonts/windows_10_font_list
-FONT_FILE_NAME = "arial.ttf"
-
-# Outputted file names will be based on this text. For example, 'meme' will
-# create 'meme.png', 'meme-1.png', 'meme-2.png', etc.
-BASE_FILE_NAME = "meme"
-
-# Relative Output Folder
-OUTPUT_DIRECTORY = pathlib.Path("Outputs")
-
 # =============================================================================
 
 
@@ -187,13 +142,12 @@ parser.add_argument(
 parser.add_argument(
     "--basicinstructions",
     help="The basic instructions to use for the chat bot. If using arguments"
-    f" and not specified, the default is '{BASIC_INSTRUCTIONS}'",
+    " and not specified, default will be used.",
 )
 parser.add_argument(
     "--imagespecialinstructions",
     help="The image special instructions to use for the chat bot. If using"
-    " arguments and not specified, the default is"
-    f" '{IMAGE_SPECIAL_INSTRUCTIONS}'",
+    " arguments and not specified, default will be used",
 )
 # These don't need to be specified as true/false, just specifying them will
 # set them to true
@@ -421,12 +375,12 @@ def validate_api_keys(
 
 
 def initialize_api_clients(
-    api_keys: ApiKeys,
+    api_keys: ApiKeys, image_platform: str
 ) -> client.StabilityInference | None:
     if api_keys.openai_key:
         openai.api_key = api_keys.openai_key
 
-    if api_keys.stability_key and IMAGE_PLATFORM == "stability":
+    if api_keys.stability_key and image_platform.lower() == "stability":
         return client.StabilityInference(
             key=api_keys.stability_key,  # API Key reference.
             verbose=True,  # Print debug messages.
@@ -457,10 +411,10 @@ def write_log_file(
     user_prompt: str,
     ai_meme_dict: MemeDict,
     file: pathlib.Path,
-    log_directory: pathlib.Path = OUTPUT_DIRECTORY,
-    basic: str = BASIC_INSTRUCTIONS,
-    special: str = IMAGE_SPECIAL_INSTRUCTIONS,
-    platform: str = IMAGE_PLATFORM,
+    log_directory: pathlib.Path,
+    basic: str,
+    special: str,
+    platform: str,
 ) -> None:
     # Get file name from path
     meme_file_name = file.name
@@ -827,16 +781,17 @@ def image_generation_request(
 # overridden by command line arguments or by being set when called from another
 # script
 def generate(
-    text_model: str = TEXT_MODEL,
-    temperature: float = TEMPERATURE,
-    basic_instructions: str = BASIC_INSTRUCTIONS,
-    image_special_instructions: str = IMAGE_SPECIAL_INSTRUCTIONS,
+    text_model: str = "gpt-4",
+    temperature: float = 1.0,
+    basic_instructions: str = "You will create funny memes that are clever and"
+    " original, and not cliche or lame.",
+    image_special_instructions: str = "The images should be photographic.",
     user_entered_prompt: str = "anything",
     meme_count: int = 1,
-    image_platform: str = IMAGE_PLATFORM,
-    font_file: str = FONT_FILE_NAME,
-    base_file_name: str = BASE_FILE_NAME,
-    output_folder: pathlib.Path = OUTPUT_DIRECTORY,
+    image_platform: str = "openai",
+    font_file: str = "arial.ttf",
+    base_file_name: str = "meme",
+    output_folder: pathlib.Path = pathlib.Path("Outputs"),
     openai_key: str | None = None,
     stability_key: str | None = None,
     clipdrop_key: str | None = None,
@@ -891,7 +846,7 @@ def generate(
     validate_api_keys(api_keys, image_platform)
     # Initialize api clients. Only get stability_api object back because
     # openai.api_key has global scope
-    stability_api = initialize_api_clients(api_keys)
+    stability_api = initialize_api_clients(api_keys, image_platform)
 
     # Check if any settings arguments, and replace the default values with the
     # args if so. To run automated from command line, specify at least 1
@@ -1003,7 +958,15 @@ def generate(
         )
         if not no_file_save:
             # Write the user message, meme text, and image prompt to a log file
-            write_log_file(user_entered_prompt, meme_dict, file)
+            write_log_file(
+                user_entered_prompt,
+                meme_dict,
+                file,
+                output_folder,
+                basic_instructions,
+                image_special_instructions,
+                image_platform,
+            )
 
         return {
             "meme_text": meme_text,
