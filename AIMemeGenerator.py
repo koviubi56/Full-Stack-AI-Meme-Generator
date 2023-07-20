@@ -391,135 +391,6 @@ def write_log_file(
         )
 
 
-def check_for_update(
-    update_release_channel: str,
-) -> bool | Literal["beta"]:
-    if update_release_channel.lower() == "none":
-        return False
-
-    print("\nGetting info about latest updates...\n")
-
-    try:
-        if update_release_channel.lower() == "stable":
-            response = requests.get(
-                "https://api.github.com/repos/ThioJoe/Full-Stack-AI-Meme-Generator/releases/latest",
-                timeout=30,
-            )
-        elif update_release_channel.lower() == "all":
-            response = requests.get(
-                "https://api.github.com/repos/ThioJoe/Full-Stack-AI-Meme-Generator/releases",
-                timeout=30,
-            )
-        else:
-            raise ValueError(
-                f"Invalid release channel {update_release_channel!r}"
-            )
-
-        if response.status_code == 403:  # noqa: PLR2004
-            print(
-                "\nError [U-4]: Got an 403 (ratelimit_reached) when attempting"
-                " to check for update."
-            )
-            print(
-                "This means you have been rate limited by github.com. Please"
-                " try again in a while.\n"
-            )
-            return False
-
-        if response.status_code != 200:  # noqa: PLR2004
-            print(
-                "Error [U-3]: Got non 200 status code (got:"
-                f" {response.status_code}) when attempting to check for"
-                " update.\n"
-            )
-            print(
-                "If this keeps happening, you may want to report the issue"
-                " here: https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/issues"
-            )
-            return False
-
-        # ??? no idea what this code block does (it probably doesn't work)
-        # assume 200 response (good)
-        if update_release_channel.lower() == "stable":
-            latest_version = response.json()["name"]
-            is_beta = False
-        elif update_release_channel.lower() == "all":
-            latest_version = response.json()[0]["name"]
-            # check if latest version is a beta.
-            # if it is continue, else check for another beta with a higher
-            # version in the 10 newest releases
-            is_beta = response.json()[0]["prerelease"]
-            if is_beta is False:
-                for i in range(9):
-                    # add a "+ 1" to index to not count the first
-                    # release (already checked)
-                    latest_version_2 = response.json()[i + 1]["name"]
-                    # make sure the version is higher than the current version
-                    if parse_version(latest_version_2) > parse_version(
-                        latest_version
-                    ):
-                        # update original latest version to the new version
-                        latest_version = latest_version_2
-                        is_beta = response.json()[i + 1]["prerelease"]
-                        # exit loop
-                        break
-
-    except OSError as error:
-        if "WinError 10013" in str(error):
-            print(
-                "WinError 10013: The OS blocked the connection to GitHub."
-                " Check your firewall settings.\n"
-            )
-        else:
-            traceback.print_exc()
-            print(
-                "Unknown OSError Error occurred while checking for updates\n"
-            )
-        return False
-    except Exception:
-        traceback.print_exc()
-        print(
-            "Error [Code U-1]: Problem while checking for updates. See above"
-            " error for more details.\n"
-        )
-        print(
-            "If this keeps happening, you may want to report the issue here: https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator/issues"
-        )
-        return False
-
-    if parse_version(latest_version) > parse_version(__version__):
-        print(
-            "------------------------ UPDATE AVAILABLE -----------------------"
-        )
-        if is_beta:
-            print(
-                " A new beta version is available! To see what's new visit:"
-                " https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator"
-                "/releases "
-            )
-        else:
-            print(
-                " A new version is available! To see what's new visit:"
-                " https://github.com/ThioJoe/Full-Stack-AI-Meme-Generator"
-                "/releases "
-            )
-        print(f"     > Current Version: {__version__}")
-        print(f"     > Latest Version: {latest_version}")
-        if is_beta:
-            print(
-                "(To stop receiving beta releases, change the"
-                " 'release_channel' setting in the config file)"
-            )
-        print(
-            "------------------------------------------------------------------------------------------"
-        )
-
-        return "beta" if is_beta else True
-
-    print(f"\nYou have the latest version: {__version__}")
-    return False
-
-
 def construct_system_prompt(
     basic_instructions: str, image_special_instructions: str
 ) -> str:
@@ -806,7 +677,6 @@ def generate(
     clipdrop_key: str | None = None,
     no_user_input: bool = False,
     no_file_save: bool = False,
-    release_channel: str = "all",
 ) -> list[dict[str, str | pathlib.Path]]:
     # Load default settings from settings.toml file. Will be overridden by
     # command line arguments, or ignored if Use_This_Config is set to False
@@ -836,9 +706,6 @@ def generate(
         )
         output_folder = settings.get("advanced", {}).get(
             "output_folder", output_folder
-        )
-        release_channel = settings.get("advanced", {}).get(
-            "release_channel", release_channel
         )
 
     # Parse the arguments
@@ -881,15 +748,6 @@ def generate(
     # Get full path of font file from font file name
     font_file = check_font(font_file)
 
-    if (
-        (not no_user_input)
-        and (
-            release_channel.lower() == "all"
-            or release_channel.lower() == "stable"
-        )
-        and check_for_update(release_channel)
-    ):
-        input("\nPress Enter to continue...")
     # Clear console
     os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
 

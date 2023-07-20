@@ -1,7 +1,7 @@
 # Todos
 
 - [X] Reorder how some stuff appear in the source code
-- [ ] Fix or remove the update mechanism
+- [X] Fix or remove the update mechanism
 - [ ] Update links to repo
 - [ ] Docstrings
 - [ ] Better log messages

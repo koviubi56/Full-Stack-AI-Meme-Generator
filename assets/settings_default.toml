@@ -51,11 +51,6 @@ base_file_name = "meme"
 # Default: "Outputs"
 output_folder = "Outputs"
 
-# Choose whether to be notified only of stable releases, or all new releases (including pre-release / beta versions)
-# Only matters when auto_check_update is enabled
-# Default = All  --  Possible Values: All | Stable | None
-release_channel = "All"
-
 # true/false - Determines if the current config should be used.
 # Default: true
 use_this_config = true
