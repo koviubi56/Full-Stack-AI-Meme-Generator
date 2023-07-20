@@ -18,7 +18,6 @@ def test_coverage(session: nox.Session) -> None:
         "-U",
         "-r",
         "requirements.txt",
-        "pytest-xdist",
         "pytest-randomly",
         "pytest-codecov[git]",
     )
@@ -26,8 +25,6 @@ def test_coverage(session: nox.Session) -> None:
     session.run(
         "pytest",
         "--codecov",
-        "-n",
-        "auto",
         "--ff",
         "-vv",
         "-r",
