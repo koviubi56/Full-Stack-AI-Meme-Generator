@@ -43,9 +43,11 @@ import textwrap
 import traceback
 from typing import Iterable
 
+import colorama
 import openai
 import requests
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
+import termcolor
 from openai.error import RateLimitError
 from PIL import Image, ImageDraw, ImageFont
 from stability_sdk import client
@@ -54,6 +56,8 @@ try:
     import tomllib  # novermin
 except Exception:
     import tomli as tomllib
+
+colorama.init()
 
 SETTINGS_FILE_NAME = "settings.toml"
 DEFAULT_SETTINGS_FILE_NAME = "settings_default.toml"
@@ -219,6 +223,7 @@ def check_font(font_file_name: str) -> pathlib.Path:
         pathlib.Path: The font file.
     """
     # Check for font file in current directory
+    termcolor.cprint("Checking the font...", "cyan")
     path = pathlib.Path(font_file_name)
     if path.exists():
         return path
@@ -249,13 +254,14 @@ def check_font(font_file_name: str) -> pathlib.Path:
 
     # Warn user and exit if not found
     if (file is None) or (not file.exists()):
-        print(
-            f'\n  ERROR:  Font file "{font_file_name}" not found. Please add'
+        termcolor.cprint(
+            f'ERROR: Font file "{font_file_name}" not found. Please add'
             " the font file to the same folder as this script. Or set the"
             " variable above to the name of a font file in the system font"
-            " folder."
+            " folder.",
+            "red",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
     # Return the font file path
     return file
@@ -299,33 +305,37 @@ def get_settings() -> dict[str, dict[str, str | float | bool]]:
     Returns:
         dict[str, dict[str, str | float | bool]]: The settings.
     """
+    termcolor.cprint("Getting settings...", "cyan")
     file = pathlib.Path(SETTINGS_FILE_NAME)
 
     if not file.exists():
         file_to_copy_path = get_assets_file(DEFAULT_SETTINGS_FILE_NAME)
         shutil.copyfile(file_to_copy_path, SETTINGS_FILE_NAME)
-        print(
-            "\nINFO: Settings file not found, so default"
+        termcolor.cprint(
+            "Settings file not found, so default"
             f" '{SETTINGS_FILE_NAME}' file created. You can use it going"
-            " forward to change more advanced settings if you want."
+            " forward to change more advanced settings if you want.",
+            "cyan",
         )
-        input("\nPress Enter to continue...")
+        input("Press Enter to continue...")
 
     # Try to get settings file, if fails, use default settings
     try:
         settings = get_config(file)
     except Exception:
-        print(
-            "\nERROR: Could not read settings file. Using default settings"
-            " instead."
+        termcolor.cprint(
+            "ERROR: Could not read settings file. Using default settings"
+            " instead.",
+            "red",
         )
         settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
 
     # If something went wrong and empty settings, will use default settings
     if settings == {}:
-        print(
-            "\nERROR: Something went wrong reading the settings file. Using"
-            " default settings instead."
+        termcolor.cprint(
+            "ERROR: Something went wrong reading the settings file. Using"
+            " default settings instead.",
+            "red",
         )
         settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
 
@@ -349,12 +359,13 @@ def get_api_keys(args: argparse.Namespace | None = None) -> APIKeys:
         file_to_copy_path = get_assets_file(DEFAULT_API_KEYS_FILE_NAME)
         # Copy default empty keys file from assets folder. Use absolute path
         shutil.copyfile(file_to_copy_path, API_KEYS_FILE_NAME)
-        print(
-            "\n  INFO:  Because running for the first time,"
+        termcolor.cprint(
+            "Because running for the first time,"
             f' "{API_KEYS_FILE_NAME}" was created. Please add your API keys to'
-            " the API Keys file."
+            " the API Keys file.",
+            "cyan",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
 
     # Default values
@@ -368,8 +379,8 @@ def get_api_keys(args: argparse.Namespace | None = None) -> APIKeys:
         clipdrop_key = keys_dict.get("clipdrop", "")
         stability_key = keys_dict.get("stabilityai", "")
     except FileNotFoundError:
-        print(
-            "Config not found, checking for command line arguments."
+        termcolor.cprint(
+            "Config not found, checking for command line arguments.", "cyan"
         )  # Could not read from config file, will try cli arguments next
 
     # Checks if any arguments are not None, and uses those values if so
@@ -397,40 +408,45 @@ def validate_api_keys(
         api_keys (APIKeys): The API keys.
         image_platform (str): The image platform to use.
     """
+    termcolor.cprint("Validating the API keys...", "cyan")
     if not api_keys.openai_key:
-        print(
-            "\n  ERROR:  No OpenAI API key found. OpenAI API key is required"
+        termcolor.cprint(
+            "ERROR: No OpenAI API key found. OpenAI API key is required"
             " - In order to generate text for the meme text and image prompt."
             f" Please add your OpenAI API key to the {API_KEYS_FILE_NAME}"
-            " file."
+            " file.",
+            "red",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
 
     valid_image_platforms = ["openai", "stability", "clipdrop"]
     image_platform = image_platform.lower()
 
     if image_platform not in valid_image_platforms:
-        print(
-            f'\n  ERROR:  Invalid image platform "{image_platform}". Valid'
-            f" image platforms are: {valid_image_platforms}"
+        termcolor.cprint(
+            f'ERROR: Invalid image platform "{image_platform}". Valid'
+            f" image platforms are: {valid_image_platforms}",
+            "red",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
     if image_platform == "stability" and not api_keys.stability_key:
-        print(
-            "\n  ERROR:  Stability AI was set as the image platform, but no"
+        termcolor.cprint(
+            "ERROR: Stability AI was set as the image platform, but no"
             f" Stability AI API key was found in the {API_KEYS_FILE_NAME}"
-            " file."
+            " file.",
+            "red",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
     if image_platform == "clipdrop" and not api_keys.clipdrop_key:
-        print(
-            "\n  ERROR:  ClipDrop was set as the image platform, but no"
-            f" ClipDrop API key was found in the {API_KEYS_FILE_NAME} file."
+        termcolor.cprint(
+            "ERROR: ClipDrop was set as the image platform, but no"
+            f" ClipDrop API key was found in the {API_KEYS_FILE_NAME} file.",
+            "red",
         )
-        input("\nPress Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit()
 
 
@@ -449,6 +465,7 @@ def initialize_api_clients(
         and the image platform is stability, return the stability interface,
         otherwise None.
     """
+    termcolor.cprint("Initializing API clients...", "cyan")
     if api_keys.openai_key:
         openai.api_key = api_keys.openai_key
 
@@ -631,7 +648,7 @@ def send_and_receive_message(
     # previous conversation
     conversation_temp.append({"role": "user", "content": user_message})
 
-    print("Sending request to write meme...")
+    termcolor.cprint("  Sending request to write meme...", "cyan")
     try:
         chat_response = openai.ChatCompletion.create(
             model=text_model,
@@ -639,8 +656,10 @@ def send_and_receive_message(
             temperature=temperature,
         )
     except RateLimitError:
-        traceback.print_exc()
-        print("\nDid you setup payment? See <https://openai.com/pricing>")
+        termcolor.cprint(traceback.format_exc(), "red")
+        termcolor.cprint(
+            "Did you setup payment? See <https://openai.com/pricing>", "cyan"
+        )
         # We don't re-raise the exception, because we want the hint^ to be
         # below the traceback
         sys.exit(1)
@@ -675,7 +694,7 @@ def create_meme(
     Returns:
         io.BytesIO: The virtual image file.
     """
-    print("Creating meme image...")
+    termcolor.cprint("  Creating meme image...", "cyan")
 
     # Load the image. Can be a path or a file-like object such as IO.BytesIO
     # virtual file
@@ -924,6 +943,7 @@ def generate(
         "use_this_config", False
     )  # If set to False, will ignore the settings.toml file
     if use_config:
+        termcolor.cprint("Getting settings from config file...", "cyan")
         text_model = settings.get("ai_settings", {}).get(
             "text_model", text_model
         )
@@ -955,8 +975,10 @@ def generate(
     # If API Keys not provided as parameters, get them from config file or
     # command line arguments
     if openai_key:
+        termcolor.cprint("Getting API keys from arguments...", "cyan")
         api_keys = APIKeys(openai_key, clipdrop_key, stability_key)
     else:
+        termcolor.cprint("Getting API keys from file...", "cyan")
         api_keys = get_api_keys(args=args)
 
     # Validate api keys
@@ -970,16 +992,42 @@ def generate(
     # argument.
     if args.image_platform:
         image_platform = args.image_platform
+        termcolor.cprint(
+            f"Image platform will be {image_platform} from cli arguments",
+            "cyan",
+        )
     if args.temperature:
         temperature = float(args.temperature)
+        termcolor.cprint(
+            f"Temperature will be {temperature} from cli arguments",
+            "cyan",
+        )
     if args.basic_instructions:
         basic_instructions = args.basic_instructions
+        termcolor.cprint(
+            f"Basic instructions will be {basic_instructions} from cli"
+            " arguments",
+            "cyan",
+        )
     if args.image_special_instructions:
         image_special_instructions = args.image_special_instructions
+        termcolor.cprint(
+            f"Image special instructions will be {image_special_instructions}"
+            " from cli arguments",
+            "cyan",
+        )
     if args.no_file_save:
         no_file_save = True
+        termcolor.cprint(
+            "Won't save file according to cli arguments",
+            "cyan",
+        )
     if args.no_user_input:
         no_user_input = True
+        termcolor.cprint(
+            "Won't ask for user input according to cli arguments",
+            "cyan",
+        )
 
     system_prompt = construct_system_prompt(
         basic_instructions, image_special_instructions
@@ -989,13 +1037,13 @@ def generate(
     # Get full path of font file from font file name
     font_file = check_font(font_file_name)
 
-    # Clear console
-    os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
-
     # ---------- Start User Input -----------
     # Display Header
-    print(
-        f"\n=============== AI Meme Generator - {__version__} ==============="
+    termcolor.cprint(
+        f" AI Meme Generator - {__version__} ".center(
+            shutil.get_terminal_size().columns, "="
+        ),
+        "blue",
     )
 
     if not no_user_input:
@@ -1004,7 +1052,7 @@ def generate(
             user_entered_prompt = args.user_prompt
         else:
             print(
-                "\nEnter a meme subject or concept (Or just hit enter to let"
+                "Enter a meme subject or concept (Or just hit enter to let"
                 " the AI decide)"
             )
             user_entered_prompt = input(" >  ")
@@ -1020,7 +1068,7 @@ def generate(
             # Set the number of memes to create
             meme_count = 1  # Default will be none if nothing entered
             print(
-                "\nEnter the number of memes to create (Or just hit Enter for"
+                "Enter the number of memes to create (Or just hit Enter for"
                 " 1): "
             )
             user_entered_count = input(" >  ")
@@ -1037,24 +1085,27 @@ def generate(
         # image_prompt
         meme = parse_meme(chat_response)
         if meme is None:
-            print("Could not interpret response! Skipping")
+            termcolor.cprint(
+                "  Could not interpret response! Skipping", "yellow"
+            )
             return None
         image_prompt = meme.image_prompt
         meme_text = meme.meme_text
 
         # Print the meme text and image prompt
-        print("\n   Meme Text:  " + meme_text)
-        print("   Image Prompt:  " + image_prompt)
+        termcolor.cprint("  Meme Text:\t" + meme_text, "cyan")
+        termcolor.cprint("  Image Prompt:\t" + image_prompt, "cyan")
 
         # Send image prompt to image generator and get image back
         # (Using DALL·E API)
-        print("\nSending image creation request...")
+        termcolor.cprint("  Sending image creation request...", "cyan")
         virtual_image_file = image_generation_request(
             api_keys, image_prompt, image_platform, stability_api
         )
 
         # Combine the meme text and image into a meme
         file = set_file_path(base_file_name, output_folder)
+        termcolor.cprint("  Creating full meme...", "cyan")
         virtual_meme_file = create_meme(
             virtual_image_file,
             meme_text,
@@ -1074,6 +1125,7 @@ def generate(
                 image_platform,
             )
 
+        termcolor.cprint("  Done!", "cyan")
         return FullMeme(meme_text, image_prompt, virtual_meme_file, file)
 
     # Create list of dictionaries to hold the results of each meme so that they
@@ -1081,10 +1133,10 @@ def generate(
     meme_results_dicts_list: list[FullMeme] = []
 
     for number in range(1, meme_count + 1):
-        print(
-            "\n----------------------------------------------------------------------------------------------------"
+        termcolor.cprint("-" * shutil.get_terminal_size().columns, "blue")
+        termcolor.cprint(
+            f"Generating meme {number} of {meme_count}...", "cyan"
         )
-        print(f"Generating meme {number} of {meme_count}...")
         meme_info_dict = single_meme_generation_loop()
 
         # Add meme info dict to list of meme results
@@ -1099,5 +1151,11 @@ if __name__ == "__main__":
     try:
         generate()
     except Exception:
-        traceback.print_exc()
-        input("\nPress Enter to exit...")
+        termcolor.cprint(traceback.format_exc(), "red")
+        termcolor.cprint(
+            "Please read the above error message! If you think this is a bug,"
+            " please report it on GitHub including the **entire** above"
+            " traceback.",
+            "yellow",
+        )
+        input("Press Enter to exit...")

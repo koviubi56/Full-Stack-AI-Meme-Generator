@@ -5,6 +5,6 @@
 - [X] Update links to repo
 - [X] Docstrings
 - [X] Make separate objects (dataclass or pydantic) instead of tuples and dicts
-- [ ] Better log messages
+- [X] Better log messages
 - [ ] Make compatible with multiple python versions
 - [ ] Lemming
