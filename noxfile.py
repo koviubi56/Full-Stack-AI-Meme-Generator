@@ -18,7 +18,7 @@ def test_coverage(session: nox.Session) -> None:
     session.install(
         "-U",
         "-r",
-        "requirements.txt",
+        "./requirements.txt",
         "pytest-xdist",
         "pytest-randomly",
         "pytest-codecov[git]",
@@ -48,7 +48,7 @@ def test_coverage(session: nox.Session) -> None:
 def test(session: nox.Session) -> None:
     session.install("-U", "pip", "setuptools", "wheel")
     session.install(
-        "-U", "-r", "requirements.txt", "pytest-xdist", "pytest-randomly"
+        "-U", "-r", "./requirements.txt", "pytest-xdist", "pytest-randomly"
     )
     session.run(
         "pytest",
