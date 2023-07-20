@@ -45,6 +45,7 @@ from typing import Iterable, Literal, NamedTuple, TypedDict
 import openai
 import requests
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
+from openai.error import RateLimitError
 from PIL import Image, ImageDraw, ImageFont
 from pkg_resources import parse_version
 from stability_sdk import client
@@ -270,7 +271,7 @@ def get_settings() -> dict[str, dict[str, str | float | bool]]:
     # Try to get settings file, if fails, use default settings
     try:
         settings = get_config(file)
-    except Exception:  # noqa: BLE001
+    except Exception:
         print(
             "\nERROR: Could not read settings file. Using default settings"
             " instead."
@@ -598,9 +599,18 @@ def send_and_receive_message(
     conversation_temp.append({"role": "user", "content": user_message})
 
     print("Sending request to write meme...")
-    chat_response = openai.ChatCompletion.create(
-        model=text_model, messages=conversation_temp, temperature=temperature
-    )
+    try:
+        chat_response = openai.ChatCompletion.create(
+            model=text_model,
+            messages=conversation_temp,
+            temperature=temperature,
+        )
+    except RateLimitError:
+        traceback.print_exc()
+        print("\nDid you setup payment? See <https://openai.com/pricing>")
+        # We don't re-raise the exception, because we want the hint^ to be
+        # below the traceback
+        sys.exit(1)
 
     return chat_response.choices[0].message.content
 

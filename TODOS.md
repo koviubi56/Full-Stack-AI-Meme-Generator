@@ -6,3 +6,4 @@
 - [ ] Better output
 - [ ] Make separate objects (dataclass or pydantic) instead of tuples and dicts
 - [ ] Docstrings
+- [ ] Better log messages
