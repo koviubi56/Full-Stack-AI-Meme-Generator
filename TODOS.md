@@ -6,5 +6,6 @@
 - [X] Docstrings
 - [X] Make separate objects (dataclass or pydantic) instead of tuples and dicts
 - [X] Better log messages
-- [ ] Make compatible with multiple python versions
+- [X] Make compatible with multiple python versions
 - [ ] Lemming
+- [ ] Add tests (w/ mocking)

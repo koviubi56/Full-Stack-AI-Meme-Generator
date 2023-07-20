@@ -41,7 +41,7 @@ import shutil
 import sys
 import textwrap
 import traceback
-from typing import Iterable
+from typing import Any, Dict, Iterable, List, Optional
 
 import colorama
 import openai
@@ -75,13 +75,13 @@ class APIKeys:
 
     Args:
         openai_key (str): OpenAI API key.
-        clipdrop_key (str | None): ClipDrop API key.
-        stability_key (str | None): Stability API key.
+        clipdrop_key (Optional[str]): ClipDrop API key.
+        stability_key (Optional[str]): Stability API key.
     """
 
     openai_key: str
-    clipdrop_key: str | None
-    stability_key: str | None
+    clipdrop_key: Optional[str]
+    stability_key: Optional[str]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -174,7 +174,7 @@ parser.add_argument(
 
 def search_for_file(
     directory: pathlib.Path, file_name: str
-) -> pathlib.Path | None:
+) -> Optional[pathlib.Path]:
     """
     Search for the file `file_name` within `directory`.
 
@@ -183,7 +183,8 @@ def search_for_file(
         file_name (str): The file's name to look for.
 
     Returns:
-        pathlib.Path | None: The first file that matched `file_name` or None.
+        Optional[pathlib.Path]: The first file that matched `file_name` or
+        None.
     """
     try:
         return next(directory.rglob(file_name))
@@ -193,7 +194,7 @@ def search_for_file(
 
 def search_for_file_in_directories(
     directories: Iterable[pathlib.Path], file_name: str
-) -> pathlib.Path | None:
+) -> Optional[pathlib.Path]:
     """
     Search for the file `file_name` within `directories`.
 
@@ -202,7 +203,8 @@ def search_for_file_in_directories(
         file_name (str): The file's name to look for.
 
     Returns:
-        pathlib.Path | None: The first file that matched `file_name` or None.
+        Optional[pathlib.Path]: The first file that matched `file_name` or
+        None.
     """
     for directory in directories:
         file = search_for_file(directory, file_name)
@@ -269,7 +271,7 @@ def check_font(font_file_name: str) -> pathlib.Path:
 
 def get_config(
     config_file: pathlib.Path,
-) -> dict[str, dict[str, str | float | bool]]:
+) -> Dict[str, Dict[str, Any]]:
     """
     Returns a dictionary of the config file.
 
@@ -277,7 +279,7 @@ def get_config(
         config_file (pathlib.Path): The config file.
 
     Returns:
-        dict[str, dict[str | float | bool]]: The settings read from the file.
+        Dict[str, Dict[str, Any]]: The settings read from the file.
     """
     with config_file.open("rb") as file:
         return tomllib.load(file)
@@ -294,16 +296,16 @@ def get_assets_file(file_name: str) -> pathlib.Path:
         pathlib.Path: The asset file.
     """
     if hasattr(sys, "_MEIPASS"):  # If running as a pyinstaller bundle
-        return pathlib.Path(sys._MEIPASS, file_name)
+        return pathlib.Path(sys._MEIPASS, file_name)  # noqa: SLF001
     return pathlib.Path("assets", file_name)
 
 
-def get_settings() -> dict[str, dict[str, str | float | bool]]:
+def get_settings() -> Dict[str, Dict[str, Any]]:
     """
     Get the settings. Create the file if it doesn't exist.
 
     Returns:
-        dict[str, dict[str, str | float | bool]]: The settings.
+        Dict[str, Dict[str, Any]]: The settings.
     """
     termcolor.cprint("Getting settings...", "cyan")
     file = pathlib.Path(SETTINGS_FILE_NAME)
@@ -342,12 +344,12 @@ def get_settings() -> dict[str, dict[str, str | float | bool]]:
     return settings
 
 
-def get_api_keys(args: argparse.Namespace | None = None) -> APIKeys:
+def get_api_keys(args: Optional[argparse.Namespace] = None) -> APIKeys:
     """
     Get API key constants from config file or command line arguments.
 
     Args:
-        args (argparse.Namespace | None, optional): The command line
+        args (Optional[argparse.Namespace], optional): The command line
         namespace. Defaults to None.
 
     Returns:
@@ -452,7 +454,7 @@ def validate_api_keys(
 
 def initialize_api_clients(
     api_keys: APIKeys, image_platform: str
-) -> client.StabilityInference | None:
+) -> Optional[client.StabilityInference]:
     """
     Initialize the API clients.
 
@@ -461,9 +463,9 @@ def initialize_api_clients(
         image_platform (str): The image platform to use.
 
     Returns:
-        client.StabilityInference | None: If the stability API key is provided
-        and the image platform is stability, return the stability interface,
-        otherwise None.
+        Optional[client.StabilityInference]: If the stability API key is
+        provided and the image platform is stability, return the stability
+        interface, otherwise None.
     """
     termcolor.cprint("Initializing API clients...", "cyan")
     if api_keys.openai_key:
@@ -598,7 +600,7 @@ def construct_system_prompt(
     )
 
 
-def parse_meme(message: str) -> Meme | None:
+def parse_meme(message: str) -> Optional[Meme]:
     """
     Gets the meme text and image prompt from the message sent by the chat
     bot.
@@ -607,7 +609,7 @@ def parse_meme(message: str) -> Meme | None:
         message (str): The AI message.
 
     Returns:
-        MemeDict | None: The meme dictionary or None.
+        Optional[MemeDict]: The meme dictionary or None.
     """
     # The regex pattern to match
     pattern = r"Meme Text: (\"(.*?)\"|(.*?))\n*\s*Image Prompt: (.*?)$"
@@ -628,7 +630,7 @@ def parse_meme(message: str) -> Meme | None:
 def send_and_receive_message(
     text_model: str,
     user_message: str,
-    conversation_temp: list[dict[str, str]],
+    conversation_temp: List[Dict[str, str]],
     temperature: float = 0.5,
 ) -> str:
     """
@@ -637,7 +639,7 @@ def send_and_receive_message(
     Args:
         text_model (str): The text model to use.
         user_message (str): The user message.
-        conversation_temp (list[dict[str, str]]): Messages.
+        conversation_temp (List[Dict[str, str]]): Messages.
         temperature (float, optional): The temperature (randomness). Defaults
         to 0.5.
 
@@ -785,7 +787,7 @@ def image_generation_request(
     api_keys: APIKeys,
     image_prompt: str,
     platform: str,
-    stability_api: client.StabilityInference | None = None,
+    stability_api: Optional[client.StabilityInference] = None,
 ) -> io.BytesIO:
     """
     Create the image.
@@ -794,7 +796,7 @@ def image_generation_request(
         api_keys (APIKeys): The API keys.
         image_prompt (str): The image platform to use.
         platform (str): The platform to use.
-        stability_api (client.StabilityInference | None, optional): The
+        stability_api (Optional[client.StabilityInference], optional): The
         stability interface. Defaults to None.
 
     Raises:
@@ -891,12 +893,12 @@ def generate(
     font_file_name: str = "arial.ttf",
     base_file_name: str = "meme",
     output_folder: pathlib.Path = pathlib.Path("Outputs"),
-    openai_key: str | None = None,
-    stability_key: str | None = None,
-    clipdrop_key: str | None = None,
+    openai_key: Optional[str] = None,
+    stability_key: Optional[str] = None,
+    clipdrop_key: Optional[str] = None,
     no_user_input: bool = False,
     no_file_save: bool = False,
-) -> list[FullMeme]:
+) -> List[FullMeme]:
     """
     Generate the memes.
 
@@ -921,18 +923,18 @@ def generate(
         Defaults to "meme".
         output_folder (pathlib.Path, optional): The directory to put the images
         into. Defaults to pathlib.Path("Outputs").
-        openai_key (str | None, optional): The OpenAI API key. Defaults to
+        openai_key (Optional[str], optional): The OpenAI API key. Defaults to
         None.
-        stability_key (str | None, optional): The stability API key. Defaults
+        stability_key (Optional[str], optional): The stability API key.
+        Defaults to None.
+        clipdrop_key (Optional[str], optional): The clipdrop API key. Defaults
         to None.
-        clipdrop_key (str | None, optional): The clipdrop API key. Defaults to
-        None.
         no_user_input (bool, optional): Don't ask for user input. Defaults to
         False.
         no_file_save (bool, optional): Don't save the files. Defaults to False.
 
     Returns:
-        list[FullMeme]: The list of the memes.
+        List[FullMeme]: The list of the memes.
         Its length may be less than `meme_count` if some memes were skipped due
         to errors.
     """
@@ -1075,7 +1077,7 @@ def generate(
             if user_entered_count:
                 meme_count = int(user_entered_count)
 
-    def single_meme_generation_loop() -> FullMeme | None:
+    def single_meme_generation_loop() -> Optional[FullMeme]:
         # Send request to chat bot to generate meme text and image prompt
         chat_response = send_and_receive_message(
             text_model, user_entered_prompt, conversation, temperature
@@ -1130,7 +1132,7 @@ def generate(
 
     # Create list of dictionaries to hold the results of each meme so that they
     # can be returned by main() if called from command line
-    meme_results_dicts_list: list[FullMeme] = []
+    meme_results_dicts_list: List[FullMeme] = []
 
     for number in range(1, meme_count + 1):
         termcolor.cprint("-" * shutil.get_terminal_size().columns, "blue")

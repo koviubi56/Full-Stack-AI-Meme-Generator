@@ -5,7 +5,7 @@ ignore = [
     "D",
     "EM101",
     "EM102",
-    "FA102",
+    "FA",
     "FBT",
     "T",
     "TRY",
@@ -16,7 +16,8 @@ ignore = [
 ]
 select = ["ALL"]
 line-length = 79
-target-version = "py38"
+# theoretically it supports 3.6, but that's invalid here
+target-version = "py37"
 
 fixable = [
     "F632",
