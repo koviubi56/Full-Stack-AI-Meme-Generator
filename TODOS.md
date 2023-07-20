@@ -4,7 +4,7 @@
 - [X] Fix or remove the update mechanism
 - [X] Update links to repo
 - [X] Docstrings
+- [X] Make separate objects (dataclass or pydantic) instead of tuples and dicts
 - [ ] Better log messages
-- [ ] Make separate objects (dataclass or pydantic) instead of tuples and dicts
 - [ ] Make compatible with multiple python versions
 - [ ] Lemming

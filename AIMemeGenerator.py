@@ -30,6 +30,7 @@ __version__ = "1.0.1"
 
 import argparse
 import base64
+import dataclasses
 import datetime
 import io
 import os
@@ -40,7 +41,7 @@ import shutil
 import sys
 import textwrap
 import traceback
-from typing import Iterable, NamedTuple, TypedDict
+from typing import Iterable
 
 import openai
 import requests
@@ -63,7 +64,24 @@ DEFAULT_API_KEYS_FILE_NAME = "api_keys_empty.toml"
 # =============================================================================
 
 
-class MemeDict(TypedDict):
+@dataclasses.dataclass(frozen=True)
+class APIKeys:
+    """
+    The API keys.
+
+    Args:
+        openai_key (str): OpenAI API key.
+        clipdrop_key (str | None): ClipDrop API key.
+        stability_key (str | None): Stability API key.
+    """
+
+    openai_key: str
+    clipdrop_key: str | None
+    stability_key: str | None
+
+
+@dataclasses.dataclass(frozen=True)
+class Meme:
     """
     A dictionary containing the meme's text and image prompt.
 
@@ -76,41 +94,42 @@ class MemeDict(TypedDict):
     image_prompt: str
 
 
-class APIKeys(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class FullMeme:
     """
-    The API keys.
+    A full meme.
 
     Args:
-        openai_key (str): OpenAI API key.
-        clipdrop_key (str | None, optional): ClipDrop API key. Defaults to
-        None.
-        stability_key (str | None, optional): Stability API key. Defaults to
-        None.
+        meme_text (str): The meme's text.
+        image_prompt (str): The image's prompt.
+        virtual_meme_file (io.BytesIO): The virtual meme image file.
+        file (pathlib.Path): The meme image file.
     """
 
-    openai_key: str
-    clipdrop_key: str | None
-    stability_key: str | None
+    meme_text: str
+    image_prompt: str
+    virtual_meme_file: io.BytesIO
+    file: pathlib.Path
 
 
 # ============================= Argument Parser ===============================
 # Parse the arguments at the start of the script
 parser = argparse.ArgumentParser()
-parser.add_argument("--openaikey", help="OpenAI API key")
-parser.add_argument("--clipdropkey", help="ClipDrop API key")
-parser.add_argument("--stabilitykey", help="Stability AI API key")
+parser.add_argument("--openai-key", help="OpenAI API key")
+parser.add_argument("--clipdrop-key", help="ClipDrop API key")
+parser.add_argument("--stability-key", help="Stability AI API key")
 parser.add_argument(
-    "--userprompt",
+    "--user-prompt",
     help="A meme subject or concept to send to the chat bot. If not specified,"
     " the user will be prompted to enter a subject or concept.",
 )
 parser.add_argument(
-    "--memecount",
+    "--meme-count",
     help="The number of memes to create. If using arguments and not specified,"
     " the default is 1.",
 )
 parser.add_argument(
-    "--imageplatform",
+    "--image-platform",
     help="The image platform to use. If using arguments and not specified, the"
     " default is 'clipdrop'. Possible options: 'openai', 'stability',"
     " 'clipdrop'",
@@ -121,25 +140,25 @@ parser.add_argument(
     " specified, the default is 1.0",
 )
 parser.add_argument(
-    "--basicinstructions",
+    "--basic-instructions",
     help="The basic instructions to use for the chat bot. If using arguments"
     " and not specified, default will be used.",
 )
 parser.add_argument(
-    "--imagespecialinstructions",
+    "--image-special-instructions",
     help="The image special instructions to use for the chat bot. If using"
     " arguments and not specified, default will be used",
 )
 # These don't need to be specified as true/false, just specifying them will
 # set them to true
 parser.add_argument(
-    "--nouserinput",
+    "--no-user-input",
     action="store_true",
     help="Will prevent any user input prompts, and will instead use default"
     " values or other arguments.",
 )
 parser.add_argument(
-    "--nofilesave",
+    "--no-file-save",
     action="store_true",
     help="If specified, the meme will not be saved to a file, and only"
     " returned as virtual file part of memeResultsDictsList.",
@@ -355,10 +374,10 @@ def get_api_keys(args: argparse.Namespace | None = None) -> APIKeys:
 
     # Checks if any arguments are not None, and uses those values if so
     if args and any(vars(args).values()):
-        openai_key = args.openaikey if args.openaikey else openai_key
-        clipdrop_key = args.clipdropkey if args.clipdropkey else clipdrop_key
+        openai_key = args.openai_key if args.openai_key else openai_key
+        clipdrop_key = args.clipdrop_key if args.clipdrop_key else clipdrop_key
         stability_key = (
-            args.stabilitykey if args.stabilitykey else stability_key
+            args.stability_key if args.stability_key else stability_key
         )
 
     return APIKeys(openai_key, clipdrop_key, stability_key)
@@ -469,7 +488,7 @@ def set_file_path(
 
 def write_log_file(
     user_prompt: str,
-    ai_meme_dict: MemeDict,
+    ai_meme: Meme,
     file: pathlib.Path,
     log_directory: pathlib.Path,
     basic: str,
@@ -482,7 +501,7 @@ def write_log_file(
 
     Args:
         user_prompt (str): The user prompt.
-        ai_meme_dict (MemeDict): The AI meme dictionary.
+        ai_meme (Meme): The AI meme.
         file (pathlib.Path): The meme file.
         log_directory (pathlib.Path): The log directory.
         basic (str): The basic AI instruction.
@@ -501,8 +520,8 @@ def write_log_file(
                 AI Basic Instructions: {basic}
                 AI Special Image Instructions: {special}
                 User Prompt: '{user_prompt}'
-                Chat Bot Meme Text: {ai_meme_dict['meme_text']}
-                Chat Bot Image Prompt: {ai_meme_dict['image_prompt']}
+                Chat Bot Meme Text: {ai_meme.meme_text}
+                Chat Bot Image Prompt: {ai_meme.image_prompt}
                 Image Generation Platform: {platform}
                 \n"""
             )
@@ -562,7 +581,7 @@ def construct_system_prompt(
     )
 
 
-def parse_meme(message: str) -> MemeDict | None:
+def parse_meme(message: str) -> Meme | None:
     """
     Gets the meme text and image prompt from the message sent by the chat
     bot.
@@ -585,7 +604,7 @@ def parse_meme(message: str) -> MemeDict | None:
             match.group(2) if match.group(2) is not None else match.group(3)
         )
 
-        return MemeDict(meme_text=meme_text, image_prompt=match.group(4))
+        return Meme(meme_text=meme_text, image_prompt=match.group(4))
     return None
 
 
@@ -762,6 +781,7 @@ def image_generation_request(
     Raises:
         ValueError: If `platform == stability` and `not stability_api`
         ValueError: If the request activated the API's safety filters
+        ValueError: If `platform == clipdrop` and `not api_keys.clipdrop`.
         ValueError: If `platform` is invalid.
         Exception: If there was some unknown error.
 
@@ -813,6 +833,8 @@ def image_generation_request(
                     virtual_image_file = io.BytesIO(artifact.binary)
 
     elif platform == "clipdrop":
+        if not api_keys.clipdrop_key:
+            raise ValueError("Missing clipdrop API key!")
         r = requests.post(
             "https://clipdrop-api.co/text-to-image/v1",
             files={"prompt": (None, image_prompt, "text/plain")},
@@ -855,7 +877,7 @@ def generate(
     clipdrop_key: str | None = None,
     no_user_input: bool = False,
     no_file_save: bool = False,
-) -> list[dict[str, str | pathlib.Path]]:
+) -> list[FullMeme]:
     """
     Generate the memes.
 
@@ -891,17 +913,9 @@ def generate(
         no_file_save (bool, optional): Don't save the files. Defaults to False.
 
     Returns:
-        list[dict[str, str | pathlib.Path]]: The list of the meme dictionaries.
+        list[FullMeme]: The list of the memes.
         Its length may be less than `meme_count` if some memes were skipped due
-        to errors. Syntax:
-        ```py
-        {
-            "meme_text": str,
-            "image_prompt": str,
-            "virtual_meme_file": io.BytesIO,
-            "file": pathlib.Path,
-        }
-        ```
+        to errors.
     """
     # Load default settings from settings.toml file. Will be overridden by
     # command line arguments, or ignored if Use_This_Config is set to False
@@ -954,17 +968,17 @@ def generate(
     # Check if any settings arguments, and replace the default values with the
     # args if so. To run automated from command line, specify at least 1
     # argument.
-    if args.imageplatform:
-        image_platform = args.imageplatform
+    if args.image_platform:
+        image_platform = args.image_platform
     if args.temperature:
         temperature = float(args.temperature)
-    if args.basicinstructions:
-        basic_instructions = args.basicinstructions
-    if args.imagespecialinstructions:
-        image_special_instructions = args.imagespecialinstructions
-    if args.nofilesave:
+    if args.basic_instructions:
+        basic_instructions = args.basic_instructions
+    if args.image_special_instructions:
+        image_special_instructions = args.image_special_instructions
+    if args.no_file_save:
         no_file_save = True
-    if args.nouserinput:
+    if args.no_user_input:
         no_user_input = True
 
     system_prompt = construct_system_prompt(
@@ -973,7 +987,7 @@ def generate(
     conversation = [{"role": "system", "content": system_prompt}]
 
     # Get full path of font file from font file name
-    font_file_name = check_font(font_file_name)
+    font_file = check_font(font_file_name)
 
     # Clear console
     os.system("cls" if os.name == "nt" else "clear")  # noqa: S605
@@ -986,8 +1000,8 @@ def generate(
 
     if not no_user_input:
         # If no user prompt argument set, get user input for prompt
-        if args.userprompt:
-            user_entered_prompt = args.userprompt
+        if args.user_prompt:
+            user_entered_prompt = args.user_prompt
         else:
             print(
                 "\nEnter a meme subject or concept (Or just hit enter to let"
@@ -1000,8 +1014,8 @@ def generate(
                 user_entered_prompt = "anything"
 
         # If no meme count argument set, get user input for meme count
-        if args.memecount:
-            meme_count = int(args.memecount)
+        if args.meme_count:
+            meme_count = int(args.meme_count)
         else:
             # Set the number of memes to create
             meme_count = 1  # Default will be none if nothing entered
@@ -1013,9 +1027,7 @@ def generate(
             if user_entered_count:
                 meme_count = int(user_entered_count)
 
-    def single_meme_generation_loop() -> (
-        dict[str, str | pathlib.Path | io.BytesIO] | None
-    ):
+    def single_meme_generation_loop() -> FullMeme | None:
         # Send request to chat bot to generate meme text and image prompt
         chat_response = send_and_receive_message(
             text_model, user_entered_prompt, conversation, temperature
@@ -1023,12 +1035,12 @@ def generate(
 
         # Take chat message and convert to dictionary with meme_text and
         # image_prompt
-        meme_dict = parse_meme(chat_response)
-        if meme_dict is None:
+        meme = parse_meme(chat_response)
+        if meme is None:
             print("Could not interpret response! Skipping")
             return None
-        image_prompt = meme_dict["image_prompt"]
-        meme_text = meme_dict["meme_text"]
+        image_prompt = meme.image_prompt
+        meme_text = meme.meme_text
 
         # Print the meme text and image prompt
         print("\n   Meme Text:  " + meme_text)
@@ -1048,13 +1060,13 @@ def generate(
             meme_text,
             file,
             no_file_save=no_file_save,
-            font_file=font_file_name,
+            font_file=font_file,
         )
         if not no_file_save:
             # Write the user message, meme text, and image prompt to a log file
             write_log_file(
                 user_entered_prompt,
-                meme_dict,
+                meme,
                 file,
                 output_folder,
                 basic_instructions,
@@ -1062,16 +1074,11 @@ def generate(
                 image_platform,
             )
 
-        return {
-            "meme_text": meme_text,
-            "image_prompt": image_prompt,
-            "virtual_meme_file": virtual_meme_file,
-            "file": file,
-        }
+        return FullMeme(meme_text, image_prompt, virtual_meme_file, file)
 
     # Create list of dictionaries to hold the results of each meme so that they
     # can be returned by main() if called from command line
-    meme_results_dicts_list = []
+    meme_results_dicts_list: list[FullMeme] = []
 
     for number in range(1, meme_count + 1):
         print(
