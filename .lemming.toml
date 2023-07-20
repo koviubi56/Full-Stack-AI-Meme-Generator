@@ -10,4 +10,4 @@ check_command = "{pyexe} -m ruff check --show-source --show-fixes -n {path}"
 
 [[linters]]
 packages = ["vermin"]
-command = "vermin --target=3.8 --eval-annotations --backport argparse --backport dataclasses --backport typing -vv AIMemeGenerator.py"
+command = "vermin --target=3.8- --eval-annotations --backport argparse --backport dataclasses --backport typing -vv AIMemeGenerator.py"

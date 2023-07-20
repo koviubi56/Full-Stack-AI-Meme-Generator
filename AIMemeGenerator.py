@@ -213,9 +213,7 @@ def search_for_file_in_directories(
     return None
 
 
-def check_font(
-    font_file_name: str, no_user_input: bool
-) -> pathlib.Path:
+def check_font(font_file_name: str, no_user_input: bool) -> pathlib.Path:
     """
     Check for font file in current directory, then check for font file in Fonts
     folder, warn user and exit if not found.
