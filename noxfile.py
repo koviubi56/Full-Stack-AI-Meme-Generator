@@ -22,10 +22,7 @@ def test_coverage(session: nox.Session) -> None:
         "pytest-randomly",
         "pytest-codecov[git]",
     )
-    try:
-        env = {"CODECOV_TOKEN": os.environ["CODECOV_TOKEN"]}
-    except KeyError:
-        env = None
+    env = {"CODECOV_TOKEN": os.environ["CODECOV_TOKEN"]}
     session.run(
         "pytest",
         "--codecov",
