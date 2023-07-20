@@ -265,7 +265,7 @@ def get_api_keys(args: argparse.Namespace | None = None) -> ApiKeys:
     # Try to read keys from config file. Default value of '' will be used if
     # not found
     try:
-        keys_dict = get_config(file)
+        keys_dict = get_config(file).get("keys", {})
         openai_key = keys_dict.get("openai", "")
         clipdrop_key = keys_dict.get("clipdrop", "")
         stability_key = keys_dict.get("stabilityai", "")
