@@ -1,5 +1,5 @@
 #----------------------------------------- Basic Section -----------------------------------------
-# Note: Do not put quotes around the settings values you choose
+# !*!*!*!*!*!*!*!*!*!*!! AT THE END OF THE FILE SET use_this_config TO true !!*!*!*!*!*!*!*!*!*!*!
 
 [basic]
 
@@ -49,8 +49,9 @@ base_file_name = "meme"
 
 # The output folder for the generated memes. Relative to the script location.
 # Default: "Outputs"
-output_folder = "Outputs"
+output_directory = "Outputs"
 
 # true/false - Determines if the current config should be used.
-# Default: true
-use_this_config = true
+# ! IMPORTANT: Set this to true!!!
+# Default: false
+use_this_config = false

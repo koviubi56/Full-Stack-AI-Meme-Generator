@@ -226,7 +226,7 @@ def check_font(font_file_name: str, no_user_input: bool) -> pathlib.Path:
         pathlib.Path: The font file.
     """
     # Check for font file in current directory
-    termcolor.cprint("Checking the font...", "cyan")
+    termcolor.cprint("Checking the font...", "black")
     path = pathlib.Path(font_file_name)
     if path.exists():
         return path
@@ -256,12 +256,12 @@ def check_font(font_file_name: str, no_user_input: bool) -> pathlib.Path:
         file = None
 
     # Warn user and exit if not found
-    if (file is None) or (not file.exists()):
+    if (not file) or (not file.exists()):
         termcolor.cprint(
             f'ERROR: Font file "{font_file_name}" not found. Please add'
-            " the font file to the same folder as this script. Or set the"
+            " the font file to the same directory as this script. Or set the"
             " variable above to the name of a font file in the system font"
-            " folder.",
+            " directory.",
             "red",
         )
         if pathlib.Path("/usr/share/fonts").exists():
@@ -306,7 +306,7 @@ def get_assets_file(file_name: str) -> pathlib.Path:
     """
     if hasattr(sys, "_MEIPASS"):  # If running as a pyinstaller bundle
         return pathlib.Path(sys._MEIPASS, file_name).resolve()  # noqa: SLF001
-    return pathlib.Path("assets", file_name).resolve()
+    return pathlib.Path(__file__, "..", "assets", file_name).resolve()
 
 
 def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
@@ -319,8 +319,8 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     Returns:
         Dict[str, Dict[str, Any]]: The settings.
     """
-    termcolor.cprint("Getting settings...", "cyan")
-    file = pathlib.Path(SETTINGS_FILE_NAME)
+    termcolor.cprint("Getting settings...", "black")
+    file = pathlib.Path(SETTINGS_FILE_NAME).resolve()
 
     if not file.exists():
         file_to_copy_path = get_assets_file(DEFAULT_SETTINGS_FILE_NAME)
@@ -338,6 +338,7 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     try:
         settings = get_config(file)
     except Exception:
+        termcolor.cprint(traceback.format_exc(), "yellow")
         termcolor.cprint(
             "ERROR: Could not read settings file. Using default settings"
             " instead.",
@@ -354,59 +355,63 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
         )
         settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
 
+    termcolor.cprint(
+        f"Config file {file} exists, using that ({settings})", "black"
+    )
     return settings
 
 
-def get_api_keys(args: Optional[argparse.Namespace] = None) -> APIKeys:
+def get_api_keys(
+    args: Optional[argparse.Namespace] = None, no_user_input: bool = False
+) -> APIKeys:
     """
     Get API key constants from config file or command line arguments.
 
     Args:
         args (Optional[argparse.Namespace], optional): The command line
         namespace. Defaults to None.
+        no_user_input (bool, optional): Don't ask for user input. Defaults to
+        False.
 
     Returns:
         APIKeys: The API keys.
     """
     # Checks if api_keys.toml file exists, if not create empty one from default
     file = pathlib.Path(API_KEYS_FILE_NAME)
-    if not file.exists():
-        file_to_copy_path = get_assets_file(DEFAULT_API_KEYS_FILE_NAME)
-        # Copy default empty keys file from assets folder. Use absolute path
-        shutil.copyfile(file_to_copy_path, API_KEYS_FILE_NAME)
-        termcolor.cprint(
-            "Because running for the first time,"
-            f' "{API_KEYS_FILE_NAME}" was created. Please add your API keys to'
-            " the API Keys file.",
-            "cyan",
-        )
-        input("Press Enter to exit...")
-        sys.exit()
 
     # Default values
-    openai_key, clipdrop_key, stability_key = "", "", ""
-
-    # Try to read keys from config file. Default value of '' will be used if
-    # not found
-    try:
-        keys_dict = get_config(file).get("keys", {})
-        openai_key = keys_dict.get("openai", "")
-        clipdrop_key = keys_dict.get("clipdrop", "")
-        stability_key = keys_dict.get("stabilityai", "")
-    except FileNotFoundError:
-        termcolor.cprint(
-            "Config not found, checking for command line arguments.", "cyan"
-        )  # Could not read from config file, will try cli arguments next
+    openai_key, clipdrop_key, stability_key = None, None, None
 
     # Checks if any arguments are not None, and uses those values if so
-    if args and any(vars(args).values()):
+    if args and any((args.openai_key, args.clipdrop_key, args.stability_key)):
         openai_key = args.openai_key if args.openai_key else openai_key
         clipdrop_key = args.clipdrop_key if args.clipdrop_key else clipdrop_key
         stability_key = (
             args.stability_key if args.stability_key else stability_key
         )
+        return APIKeys(openai_key, clipdrop_key, stability_key)
 
-    return APIKeys(openai_key, clipdrop_key, stability_key)
+    # Try to read keys from config file. Default value of '' will be used if
+    # not found
+    if file.exists():
+        keys_dict = get_config(file).get("keys", {})
+        openai_key = keys_dict.get("openai", None) or None
+        clipdrop_key = keys_dict.get("clipdrop", None) or None
+        stability_key = keys_dict.get("stabilityai", None) or None
+        return APIKeys(openai_key, clipdrop_key, stability_key)
+
+    # Copy default empty keys file from assets folder.
+    file_to_copy_path = get_assets_file(DEFAULT_API_KEYS_FILE_NAME)
+    shutil.copyfile(file_to_copy_path, API_KEYS_FILE_NAME)
+    termcolor.cprint(
+        "Because running for the first time,"
+        f' "{API_KEYS_FILE_NAME}" was created. Please add your API keys to'
+        " the API Keys file.",
+        "cyan",
+    )
+    if not no_user_input:
+        input("Press Enter to exit...")
+    sys.exit(1)
 
 
 # ------------ VALIDATION ------------
@@ -415,6 +420,7 @@ def get_api_keys(args: Optional[argparse.Namespace] = None) -> APIKeys:
 def validate_api_keys(
     api_keys: APIKeys,
     image_platform: str,
+    no_user_input: bool,
 ) -> None:
     """
     Validate `api_keys`.
@@ -422,8 +428,9 @@ def validate_api_keys(
     Args:
         api_keys (APIKeys): The API keys.
         image_platform (str): The image platform to use.
+        no_user_input (bool): Don't ask for user input
     """
-    termcolor.cprint("Validating the API keys...", "cyan")
+    termcolor.cprint("Validating the API keys...", "black")
     if not api_keys.openai_key:
         termcolor.cprint(
             "ERROR: No OpenAI API key found. OpenAI API key is required"
@@ -432,8 +439,9 @@ def validate_api_keys(
             " file.",
             "red",
         )
-        input("Press Enter to exit...")
-        sys.exit()
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
 
     valid_image_platforms = ["openai", "stability", "clipdrop"]
     image_platform = image_platform.lower()
@@ -444,8 +452,9 @@ def validate_api_keys(
             f" image platforms are: {valid_image_platforms}",
             "red",
         )
-        input("Press Enter to exit...")
-        sys.exit()
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
     if image_platform == "stability" and not api_keys.stability_key:
         termcolor.cprint(
             "ERROR: Stability AI was set as the image platform, but no"
@@ -453,16 +462,18 @@ def validate_api_keys(
             " file.",
             "red",
         )
-        input("Press Enter to exit...")
-        sys.exit()
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
     if image_platform == "clipdrop" and not api_keys.clipdrop_key:
         termcolor.cprint(
             "ERROR: ClipDrop was set as the image platform, but no"
             f" ClipDrop API key was found in the {API_KEYS_FILE_NAME} file.",
             "red",
         )
-        input("Press Enter to exit...")
-        sys.exit()
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
 
 
 def initialize_api_clients(
@@ -480,7 +491,7 @@ def initialize_api_clients(
         provided and the image platform is stability, return the stability
         interface, otherwise None.
     """
-    termcolor.cprint("Initializing API clients...", "cyan")
+    termcolor.cprint("Initializing API clients...", "black")
     if api_keys.openai_key:
         openai.api_key = api_keys.openai_key
 
@@ -867,8 +878,6 @@ def image_generation_request(
                     virtual_image_file = io.BytesIO(artifact.binary)
 
     elif platform == "clipdrop":
-        if not api_keys.clipdrop_key:
-            raise ValueError("Missing clipdrop API key!")
         r = requests.post(
             "https://clipdrop-api.co/text-to-image/v1",
             files={"prompt": (None, image_prompt, "text/plain")},
@@ -905,7 +914,7 @@ def generate(
     image_platform: str = "openai",
     font_file_name: str = "arial.ttf",
     base_file_name: str = "meme",
-    output_folder: pathlib.Path = pathlib.Path("Outputs"),
+    output_directory: str | pathlib.Path = "Outputs",
     openai_key: Optional[str] = None,
     stability_key: Optional[str] = None,
     clipdrop_key: Optional[str] = None,
@@ -934,8 +943,8 @@ def generate(
         to "arial.ttf".
         base_file_name (str, optional): The base file name for the images.
         Defaults to "meme".
-        output_folder (pathlib.Path, optional): The directory to put the images
-        into. Defaults to pathlib.Path("Outputs").
+        output_directory (pathlib.Path, optional): The directory to put the
+        images into. Defaults to pathlib.Path("Outputs").
         openai_key (Optional[str], optional): The OpenAI API key. Defaults to
         None.
         stability_key (Optional[str], optional): The stability API key.
@@ -951,8 +960,13 @@ def generate(
         Its length may be less than `meme_count` if some memes were skipped due
         to errors.
     """
-    # Load default settings from settings.toml file. Will be overridden by
-    # command line arguments, or ignored if Use_This_Config is set to False
+    # Display Header
+    termcolor.cprint(
+        f" AI Meme Generator - {__version__} ".center(
+            shutil.get_terminal_size().columns, "="
+        ),
+        "blue",
+    )
     print(
         """
 AI Meme Generator
@@ -966,9 +980,13 @@ under certain conditions.
 """
     )
     settings = get_settings(no_user_input)
-    use_config = settings.get(
-        "use_this_config", False
-    )  # If set to False, will ignore the settings.toml file
+    use_config = settings.get("advanced", {}).get(
+        "use_this_config",
+        False
+        # ! This MUST be set to False!
+        # This is because get_settings() will return the default config if the
+        # config file doesn't exist, which WOULD OVERWRITE the arguments.
+    )
     if use_config:
         termcolor.cprint("Getting settings from config file...", "cyan")
         text_model = settings.get("ai_settings", {}).get(
@@ -992,9 +1010,11 @@ under certain conditions.
         base_file_name = settings.get("advanced", {}).get(
             "base_file_name", base_file_name
         )
-        output_folder = settings.get("advanced", {}).get(
-            "output_folder", output_folder
+        output_directory = settings.get("advanced", {}).get(
+            "output_directory", output_directory
         )
+
+    output_directory = pathlib.Path(output_directory).resolve()
 
     # Parse the arguments
     args = parser.parse_args()
@@ -1006,10 +1026,10 @@ under certain conditions.
         api_keys = APIKeys(openai_key, clipdrop_key, stability_key)
     else:
         termcolor.cprint("Getting API keys from file...", "cyan")
-        api_keys = get_api_keys(args=args)
+        api_keys = get_api_keys(args, no_user_input)
 
     # Validate api keys
-    validate_api_keys(api_keys, image_platform)
+    validate_api_keys(api_keys, image_platform, no_user_input)
     # Initialize api clients. Only get stability_api object back because
     # openai.api_key has global scope
     stability_api = initialize_api_clients(api_keys, image_platform)
@@ -1061,18 +1081,6 @@ under certain conditions.
     )
     conversation = [{"role": "system", "content": system_prompt}]
 
-    # Get full path of font file from font file name
-    font_file = check_font(font_file_name, no_user_input)
-
-    # ---------- Start User Input -----------
-    # Display Header
-    termcolor.cprint(
-        f" AI Meme Generator - {__version__} ".center(
-            shutil.get_terminal_size().columns, "="
-        ),
-        "blue",
-    )
-
     if not no_user_input:
         # If no user prompt argument set, get user input for prompt
         if args.user_prompt:
@@ -1102,6 +1110,9 @@ under certain conditions.
             if user_entered_count:
                 meme_count = int(user_entered_count)
 
+    # Get full path of font file from font file name
+    font_file = check_font(font_file_name, no_user_input)
+
     def single_meme_generation_loop() -> Optional[FullMeme]:
         # Send request to chat bot to generate meme text and image prompt
         chat_response = send_and_receive_message(
@@ -1111,7 +1122,7 @@ under certain conditions.
         # Take chat message and convert to dictionary with meme_text and
         # image_prompt
         meme = parse_meme(chat_response)
-        if meme is None:
+        if not meme:
             termcolor.cprint(
                 "  Could not interpret response! Skipping", "yellow"
             )
@@ -1131,7 +1142,7 @@ under certain conditions.
         )
 
         # Combine the meme text and image into a meme
-        file = set_file_path(base_file_name, output_folder)
+        file = set_file_path(base_file_name, output_directory)
         termcolor.cprint("  Creating full meme...", "cyan")
         virtual_meme_file = create_meme(
             virtual_image_file,
@@ -1146,7 +1157,7 @@ under certain conditions.
                 user_entered_prompt,
                 meme,
                 file,
-                output_folder,
+                output_directory,
                 basic_instructions,
                 image_special_instructions,
                 image_platform,
