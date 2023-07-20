@@ -940,6 +940,18 @@ def generate(
     """
     # Load default settings from settings.toml file. Will be overridden by
     # command line arguments, or ignored if Use_This_Config is set to False
+    print(
+        """
+AI Meme Generator
+Originally created by ThioJoe <github.com/ThioJoe/Full-Stack-AI-Meme-Generator>
+Modified by Koviubi56 in 2023.
+
+Copyright (C) 2023  Koviubi56
+This program comes with ABSOLUTELY NO WARRANTY.
+This is free software, and you are welcome to redistribute it
+under certain conditions.
+"""
+    )
     settings = get_settings()
     use_config = settings.get(
         "use_this_config", False
