@@ -69,48 +69,10 @@ class MemeDict(TypedDict):
     image_prompt: str
 
 
-def construct_system_prompt(
-    basic_instructions: str, image_special_instructions: str
-) -> str:
-    """Construct the system prompt for the chat bot."""
-    format_instructions = (
-        "You are a meme generator with the following formatting instructions."
-        " Each meme will consist of text that will appear at the top, and an"
-        " image to go along with it. The user will send you a message with a"
-        " general theme or concept on which you will base the meme. The user"
-        ' may choose to send you a text saying something like "anything" or'
-        ' "whatever you want", or even no text at all, which you should not'
-        " take literally, but take to mean they wish for you to come up with"
-        " something yourself.  The memes don't necessarily need to start with"
-        ' "when", but they can. In any case, you will respond with two things:'
-        " First, the text of the meme that will be displayed in the final"
-        " meme. Second, some text that will be used as an image prompt for an"
-        " AI image generator to generate an image to also be used as part of"
-        " the meme. You must respond only in the format as described next,"
-        " because your response will be parsed, so it is important it conforms"
-        ' to the format. The first line of your response should be: "Meme'
-        ' Text: " followed by the meme text. The second line of your response'
-        ' should be: "Image Prompt: " followed by the image prompt text.  ---'
-        " Now here are additional instructions... "
-    )
-    basic_instruction_append = (
-        "Next are instructions for the overall approach you should take to"
-        " creating the memes. Interpret as best as possible:"
-        f" {basic_instructions} | "
-    )
-    special_instructions_ippend = (
-        "Next are any special instructions for the image prompt. For example,"
-        ' if the instructions are "the images should be photographic style",'
-        ' your prompt may append ", photograph" at the end, or begin with'
-        ' "photograph of". It does not have to literally match the instruction'
-        f" but interpret as best as possible: {image_special_instructions}"
-    )
-
-    return (
-        format_instructions
-        + basic_instruction_append
-        + special_instructions_ippend
-    )
+class ApiKeys(NamedTuple):
+    openai_key: str
+    clipdrop_key: str | None
+    stability_key: str | None
 
 
 # ============================= Argument Parser ===============================
@@ -164,14 +126,6 @@ parser.add_argument(
     help="If specified, the meme will not be saved to a file, and only"
     " returned as virtual file part of memeResultsDictsList.",
 )
-args = parser.parse_args()
-
-
-# Create a namedtuple class
-class ApiKeys(NamedTuple):
-    openai_key: str
-    clipdrop_key: str | None
-    stability_key: str | None
 
 
 # ==================== Run Checks and Import Configs  =========================
@@ -566,6 +520,50 @@ def check_for_update(
     return False
 
 
+def construct_system_prompt(
+    basic_instructions: str, image_special_instructions: str
+) -> str:
+    """Construct the system prompt for the chat bot."""
+    format_instructions = (
+        "You are a meme generator with the following formatting instructions."
+        " Each meme will consist of text that will appear at the top, and an"
+        " image to go along with it. The user will send you a message with a"
+        " general theme or concept on which you will base the meme. The user"
+        ' may choose to send you a text saying something like "anything" or'
+        ' "whatever you want", or even no text at all, which you should not'
+        " take literally, but take to mean they wish for you to come up with"
+        " something yourself.  The memes don't necessarily need to start with"
+        ' "when", but they can. In any case, you will respond with two things:'
+        " First, the text of the meme that will be displayed in the final"
+        " meme. Second, some text that will be used as an image prompt for an"
+        " AI image generator to generate an image to also be used as part of"
+        " the meme. You must respond only in the format as described next,"
+        " because your response will be parsed, so it is important it conforms"
+        ' to the format. The first line of your response should be: "Meme'
+        ' Text: " followed by the meme text. The second line of your response'
+        ' should be: "Image Prompt: " followed by the image prompt text.  ---'
+        " Now here are additional instructions... "
+    )
+    basic_instruction_append = (
+        "Next are instructions for the overall approach you should take to"
+        " creating the memes. Interpret as best as possible:"
+        f" {basic_instructions} | "
+    )
+    special_instructions_ippend = (
+        "Next are any special instructions for the image prompt. For example,"
+        ' if the instructions are "the images should be photographic style",'
+        ' your prompt may append ", photograph" at the end, or begin with'
+        ' "photograph of". It does not have to literally match the instruction'
+        f" but interpret as best as possible: {image_special_instructions}"
+    )
+
+    return (
+        format_instructions
+        + basic_instruction_append
+        + special_instructions_ippend
+    )
+
+
 def parse_meme(message: str) -> MemeDict | None:
     """
     Gets the meme text and image prompt from the message sent by the chat
@@ -734,7 +732,8 @@ def image_generation_request(
     elif platform == "stability":
         if not stability_api:
             raise ValueError(
-                "Could not initialize the Stability API! Is the API key missing?"
+                "Could not initialize the Stability API! Is the API key"
+                " missing?"
             )
         # Set up our initial generation parameters.
         stability_response = stability_api.generate(
