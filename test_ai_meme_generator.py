@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import io
 import pathlib
 import sys
+import warnings
 from typing import Any, Optional
 from unittest.mock import Mock
 
@@ -30,8 +31,8 @@ import AIMemeGenerator
 MEME_TEXT = "When the H"
 IMAGE_PROMPT = "The letter H"
 AI_RESPONSE = f"Meme Text: {MEME_TEXT}\nImage Prompt: {IMAGE_PROMPT}"
-TEST_IMAGE = pathlib.Path(__file__, "..", "test_image.png")
-TEST_FULL_MEME = pathlib.Path(__file__, "..", "test_full_meme.png")
+TEST_IMAGE = pathlib.Path(__file__, "..", "test_image.png").resolve()
+TEST_FULL_MEME = "test_full_meme_{}.png"
 
 
 def mock_initialize_api_clients(
@@ -45,11 +46,24 @@ def mock_initialize_api_clients(
 def mock_set_file_path(
     base_name: str, output_directory: pathlib.Path
 ) -> pathlib.Path:
-    return pathlib.Path(output_directory, f"{base_name}.png")
+    return pathlib.Path(output_directory, f"{base_name}.png").resolve()
 
 
 def mock_get_assets_file(file_name: str) -> pathlib.Path:
     return pathlib.Path(__file__, "..", "assets", file_name).resolve()
+
+
+def get_font() -> Optional[pathlib.Path]:
+    try:
+        return AIMemeGenerator.check_font("arial.ttf", True).resolve()
+    except BaseException:  # may raise SystemExit
+        path = pathlib.Path("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf")
+        if path.exists():
+            return path.resolve()
+        warnings.warn(  # noqa: B028
+            "!*! COULD NOT FIND A USABLE FONT !*! Skipping image generation"
+            " and checking."
+        )
 
 
 def do_test_generate(
@@ -59,6 +73,7 @@ def do_test_generate(
     api_keys: AIMemeGenerator.APIKeys,
     image_platform: str,
 ) -> None:
+    font = get_font()
     monkeypatch.chdir(tmp_path)
     with monkeypatch.context() as monkey:
         mock_init = Mock(side_effect=mock_initialize_api_clients)
@@ -73,8 +88,16 @@ def do_test_generate(
         monkey.setattr(AIMemeGenerator, "set_file_path", mock_file)
         mock_asset = Mock(side_effect=mock_get_assets_file)
         monkey.setattr(AIMemeGenerator, "get_assets_file", mock_asset)
-        mock_sys_argv = []
-        monkey.setattr(sys, "argv", mock_sys_argv)
+        monkey.setattr(sys, "argv", [])
+        if not font:
+            monkey.setattr(
+                AIMemeGenerator, "check_font", Mock(return_value=None)
+            )
+            monkey.setattr(
+                AIMemeGenerator,
+                "create_meme",
+                Mock(return_value=io.BytesIO(b"")),
+            )
 
         memes = AIMemeGenerator.generate(
             output_folder=pathlib.Path.cwd().resolve(),
@@ -83,14 +106,27 @@ def do_test_generate(
             stability_key=api_keys.stability_key,
             image_platform=image_platform,
             no_user_input=True,
+            font_file_name=str(font),
         )
 
     # Check output
     assert len(memes) == 1
     assert memes[0].meme_text == MEME_TEXT
     assert memes[0].image_prompt == IMAGE_PROMPT
-    assert memes[0].virtual_meme_file.getvalue() == TEST_FULL_MEME.read_bytes()
-    assert memes[0].file == pathlib.Path(tmp_path, "meme.png")
+    if font:
+        full_meme = pathlib.Path(
+            __file__, "..", TEST_FULL_MEME.format(font.stem)
+        ).resolve()
+        if full_meme.exists():
+            assert (
+                memes[0].virtual_meme_file.getvalue() == full_meme.read_bytes()
+            )
+        else:
+            warnings.warn(  # noqa: B028
+                f"the font {font} does not have a corresponding full meme file"
+                f" {full_meme}! Skipping image testing..."
+            )
+    assert memes[0].file == pathlib.Path(tmp_path, "meme.png").resolve()
     assert (
         pathlib.Path(tmp_path, "log.txt").read_text(encoding="utf-8")
         == f"""
@@ -138,7 +174,7 @@ Image Generation Platform: {image_platform}
         mock_image.assert_called_once_with(
             api_keys, IMAGE_PROMPT, image_platform, None
         )
-    mock_file.assert_called_once_with("meme", tmp_path)
+    mock_file.assert_called_once_with("meme", tmp_path.resolve())
     mock_asset.assert_called_once_with("settings_default.toml")
 
 

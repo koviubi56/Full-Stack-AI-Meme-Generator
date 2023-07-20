@@ -213,13 +213,16 @@ def search_for_file_in_directories(
     return None
 
 
-def check_font(font_file_name: str) -> pathlib.Path:
+def check_font(
+    font_file_name: str, no_user_input: bool
+) -> pathlib.Path:
     """
     Check for font file in current directory, then check for font file in Fonts
     folder, warn user and exit if not found.
 
     Args:
         font_file_name (str): The font file's name.
+        no_user_input (bool): Don't ask for user input.
 
     Returns:
         pathlib.Path: The font file.
@@ -263,8 +266,16 @@ def check_font(font_file_name: str) -> pathlib.Path:
             " folder.",
             "red",
         )
-        input("Press Enter to exit...")
-        sys.exit()
+        if pathlib.Path("/usr/share/fonts").exists():
+            termcolor.cprint(
+                "HINT: Look into /usr/share/fonts! If you find a .ttf file"
+                " there, specify it as the font to use using config's"
+                " advanced.font_file key",
+                "cyan",
+            )
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
     # Return the font file path
     return file
 
@@ -1053,7 +1064,7 @@ under certain conditions.
     conversation = [{"role": "system", "content": system_prompt}]
 
     # Get full path of font file from font file name
-    font_file = check_font(font_file_name)
+    font_file = check_font(font_file_name, no_user_input)
 
     # ---------- Start User Input -----------
     # Display Header

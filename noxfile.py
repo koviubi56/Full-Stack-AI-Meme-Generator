@@ -52,7 +52,8 @@ def test(session: nox.Session) -> None:
     )
     session.run(
         "pytest",
-        "-n auto",
+        "-n",
+        "auto",
         "--ff",
         "-vv",
         "-r",
