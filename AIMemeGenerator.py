@@ -48,7 +48,7 @@ import openai
 import requests
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 import termcolor
-from openai.error import RateLimitError
+from openai.error import InvalidRequestError, RateLimitError
 from PIL import Image, ImageDraw, ImageFont
 from stability_sdk import client
 
@@ -679,6 +679,36 @@ def send_and_receive_message(
             "hint: Did you setup payment? See <https://openai.com/pricing>",
             "cyan",
         )
+        raise
+    except InvalidRequestError as error:
+        if "The model" in str(error) and "does not exist" in str(error):
+            if str(error) == "The model `gpt-4` does not exist":
+                termcolor.cprint(
+                    "hint: You do not have access to the GPT-4 model yet.",
+                    "cyan",
+                )
+                print(
+                    "hint: You can see more about the current GPT-4"
+                    " requirements here: <https://help.openai.com/en/articles"
+                    "/7102672-how-can-i-access-gpt-4>",
+                    "cyan",
+                )
+                print(
+                    "hint: Also ensure your country is supported:"
+                    " <https://platform.openai.com/docs/supported-countries>",
+                    "cyan",
+                )
+            else:
+                print(
+                    "hint: Either the model name is incorrect, or you do not"
+                    " have access to it.",
+                    "cyan",
+                )
+                print(
+                    "hint: See this page to see the model names to use in the"
+                    " API: <https://platform.openai.com/docs/models/overview>",
+                    "cyan",
+                )
         raise
 
     return chat_response.choices[0].message.content
