@@ -41,7 +41,7 @@ import shutil
 import sys
 import textwrap
 import traceback
-from typing import Any, Dict, Iterable, List, Literal, Optional
+from typing import Any, Dict, Iterable, List, Literal, Optional, Union
 
 import colorama
 import openai
@@ -935,7 +935,7 @@ def generate(
     image_platform: str = "openai",
     font_file_name: str = "arial.ttf",
     base_file_name: str = "meme",
-    output_directory: str | pathlib.Path = "Outputs",
+    output_directory: Union[str, pathlib.Path] = "Outputs",
     openai_key: Optional[str] = None,
     stability_key: Optional[str] = None,
     clipdrop_key: Optional[str] = None,
