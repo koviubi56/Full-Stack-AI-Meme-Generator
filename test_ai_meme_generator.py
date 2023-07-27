@@ -23,7 +23,7 @@ import io
 import pathlib
 import sys
 import warnings
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -142,7 +142,7 @@ stabilityai =\
                 height: int,
                 samples: int,
                 sampler: int,
-            ) -> list[object]:
+            ) -> List[object]:
                 assert prompt == IMAGE_PROMPT
                 assert steps == 30
                 assert cfg_scale == 7.0
@@ -179,8 +179,8 @@ stabilityai =\
             @staticmethod
             def post(
                 url: str,
-                files: dict[str, tuple[None, str, str]],
-                headers: dict[str, str],
+                files: Dict[str, Tuple[None, str, str]],
+                headers: Dict[str, str],
                 timeout: int,
             ) -> HTTPResponse:
                 assert url == "https://clipdrop-api.co/text-to-image/v1"
