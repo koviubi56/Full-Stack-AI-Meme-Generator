@@ -896,8 +896,7 @@ def image_generation_request(
                         " could not be processed. Please modify the prompt and"
                         " try again."
                     )
-                if artifact.type == generation.ARTIFACT_IMAGE:
-                    virtual_image_file = io.BytesIO(artifact.binary)
+                virtual_image_file = io.BytesIO(artifact.binary)
 
     elif platform == "clipdrop":
         r = requests.post(
