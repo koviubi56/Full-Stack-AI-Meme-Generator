@@ -667,7 +667,10 @@ def send_and_receive_message(
     # previous conversation
     conversation_temp.append({"role": "user", "content": user_message})
 
-    termcolor.cprint("  Sending request to write meme...", "cyan")
+    termcolor.cprint(
+        f"  Sending request to write meme to model {text_model}...",
+        "cyan",
+    )
     try:
         chat_response = openai.ChatCompletion.create(
             model=text_model,
@@ -675,12 +678,14 @@ def send_and_receive_message(
             temperature=temperature,
         )
     except RateLimitError:
+        termcolor.cprint("\nERROR! See below hint and traceback!", "yellow")
         termcolor.cprint(
             "hint: Did you setup payment? See <https://openai.com/pricing>",
             "cyan",
         )
         raise
     except InvalidRequestError as error:
+        termcolor.cprint("\nERROR! See below hint and traceback!", "yellow")
         if "The model" in str(error) and "does not exist" in str(error):
             if str(error) == "The model `gpt-4` does not exist":
                 termcolor.cprint(
@@ -913,12 +918,7 @@ def image_generation_request(
     else:
         raise InvalidImagePlatformError(platform)
 
-    try:
-        return virtual_image_file
-    except NameError as error:
-        raise RuntimeError(
-            "Could not generate image due to above error"
-        ) from error
+    return virtual_image_file
 
 
 # ==================== RUN ====================
