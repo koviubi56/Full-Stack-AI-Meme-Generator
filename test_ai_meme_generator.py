@@ -55,8 +55,8 @@ def mock_set_file_path(
 
 def get_font() -> Optional[pathlib.Path]:
     try:
-        return AIMemeGenerator.check_font("arial.ttf", True).resolve()
-    except BaseException:  # may raise SystemExit
+        return AIMemeGenerator.check_font("arial.ttf").resolve()
+    except Exception:
         path = pathlib.Path("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf")
         if path.exists():
             return path.resolve()
@@ -379,7 +379,7 @@ def test_get_api_keys(
 
 
 def test_validate_api_keys() -> None:
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.InvalidImagePlatformError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "openai",
@@ -387,12 +387,11 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "asdf",
-            True,
         )
 
     # ---
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 None,  # type: ignore  # noqa: PGH003
@@ -400,9 +399,8 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "openai",
-            True,
         )
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "",
@@ -410,7 +408,6 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "openai",
-            True,
         )
     AIMemeGenerator.validate_api_keys(
         AIMemeGenerator.APIKeys(
@@ -419,9 +416,8 @@ def test_validate_api_keys() -> None:
             None,
         ),
         "openai",
-        True,
     )
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "openai",
@@ -429,9 +425,8 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "clipdrop",
-            True,
         )
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "openai",
@@ -439,9 +434,8 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "stability",
-            True,
         )
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "openai",
@@ -449,9 +443,8 @@ def test_validate_api_keys() -> None:
                 "stability",
             ),
             "clipdrop",
-            True,
         )
-    with pytest.raises(SystemExit):
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
         AIMemeGenerator.validate_api_keys(
             AIMemeGenerator.APIKeys(
                 "openai",
@@ -459,7 +452,6 @@ def test_validate_api_keys() -> None:
                 None,
             ),
             "stability",
-            True,
         )
     AIMemeGenerator.validate_api_keys(
         AIMemeGenerator.APIKeys(
@@ -468,7 +460,6 @@ def test_validate_api_keys() -> None:
             None,
         ),
         "clipdrop",
-        True,
     )
     AIMemeGenerator.validate_api_keys(
         AIMemeGenerator.APIKeys(
@@ -477,7 +468,6 @@ def test_validate_api_keys() -> None:
             "stability",
         ),
         "stability",
-        True,
     )
     AIMemeGenerator.validate_api_keys(
         AIMemeGenerator.APIKeys(
@@ -486,7 +476,6 @@ def test_validate_api_keys() -> None:
             "stability",
         ),
         "clipdrop",
-        True,
     )
     AIMemeGenerator.validate_api_keys(
         AIMemeGenerator.APIKeys(
@@ -495,5 +484,4 @@ def test_validate_api_keys() -> None:
             "stability",
         ),
         "stability",
-        True,
     )

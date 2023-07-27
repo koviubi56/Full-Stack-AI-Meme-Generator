@@ -41,7 +41,7 @@ import shutil
 import sys
 import textwrap
 import traceback
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Literal, Optional
 
 import colorama
 import openai
@@ -66,6 +66,47 @@ DEFAULT_API_KEYS_FILE_NAME = "api_keys_empty.toml"
 
 
 # =============================================================================
+
+
+class MemeGeneratorError(RuntimeError):
+    """Base class for all AIMemeGenerator exceptions."""
+
+
+@dataclasses.dataclass(frozen=True)
+class NoFontFileError(MemeGeneratorError):
+    """Could not find the font file."""
+
+    font_file: str
+
+    def __str__(self) -> str:
+        return (
+            f"Font file {self.font_file!r} not found. Please add the font file"
+            " to the same folder as this script. Or set the variable above to"
+            " the name of a font file in the system font folder."
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class MissingAPIKeyError(MemeGeneratorError):
+    """A required API key is missing."""
+
+    api: Literal["openai", "stability", "clipdrop"]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.api} is expecting an API key, but no {self.api} API key"
+            " was found in the api_keys.toml file."
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class InvalidImagePlatformError(MemeGeneratorError):
+    """Invalid image platform."""
+
+    image_platform: str
+
+    def __str__(self) -> str:
+        return f"Invalid image platform {self.image_platform!r}."
 
 
 @dataclasses.dataclass(frozen=True)
@@ -213,7 +254,7 @@ def search_for_file_in_directories(
     return None
 
 
-def check_font(font_file_name: str, no_user_input: bool) -> pathlib.Path:
+def check_font(font_file_name: str) -> pathlib.Path:
     """
     Check for font file in current directory, then check for font file in Fonts
     folder, warn user and exit if not found.
@@ -257,23 +298,7 @@ def check_font(font_file_name: str, no_user_input: bool) -> pathlib.Path:
 
     # Warn user and exit if not found
     if (not file) or (not file.exists()):
-        termcolor.cprint(
-            f'ERROR: Font file "{font_file_name}" not found. Please add'
-            " the font file to the same directory as this script. Or set the"
-            " variable above to the name of a font file in the system font"
-            " directory.",
-            "red",
-        )
-        if pathlib.Path("/usr/share/fonts").exists():
-            termcolor.cprint(
-                "HINT: Look into /usr/share/fonts! If you find a .ttf file"
-                " there, specify it as the font to use using config's"
-                " advanced.font_file key",
-                "cyan",
-            )
-        if not no_user_input:
-            input("Press Enter to exit...")
-        sys.exit(1)
+        raise NoFontFileError(font_file_name)
     # Return the font file path
     return file
 
@@ -420,7 +445,6 @@ def get_api_keys(
 def validate_api_keys(
     api_keys: APIKeys,
     image_platform: str,
-    no_user_input: bool,
 ) -> None:
     """
     Validate `api_keys`.
@@ -432,48 +456,17 @@ def validate_api_keys(
     """
     termcolor.cprint("Validating the API keys...", "black")
     if not api_keys.openai_key:
-        termcolor.cprint(
-            "ERROR: No OpenAI API key found. OpenAI API key is required"
-            " - In order to generate text for the meme text and image prompt."
-            f" Please add your OpenAI API key to the {API_KEYS_FILE_NAME}"
-            " file.",
-            "red",
-        )
-        if not no_user_input:
-            input("Press Enter to exit...")
-        sys.exit(1)
+        raise MissingAPIKeyError("openai")
 
     valid_image_platforms = ["openai", "stability", "clipdrop"]
     image_platform = image_platform.lower()
 
     if image_platform not in valid_image_platforms:
-        termcolor.cprint(
-            f'ERROR: Invalid image platform "{image_platform}". Valid'
-            f" image platforms are: {valid_image_platforms}",
-            "red",
-        )
-        if not no_user_input:
-            input("Press Enter to exit...")
-        sys.exit(1)
+        raise InvalidImagePlatformError(image_platform)
     if image_platform == "stability" and not api_keys.stability_key:
-        termcolor.cprint(
-            "ERROR: Stability AI was set as the image platform, but no"
-            f" Stability AI API key was found in the {API_KEYS_FILE_NAME}"
-            " file.",
-            "red",
-        )
-        if not no_user_input:
-            input("Press Enter to exit...")
-        sys.exit(1)
+        raise MissingAPIKeyError("stability")
     if image_platform == "clipdrop" and not api_keys.clipdrop_key:
-        termcolor.cprint(
-            "ERROR: ClipDrop was set as the image platform, but no"
-            f" ClipDrop API key was found in the {API_KEYS_FILE_NAME} file.",
-            "red",
-        )
-        if not no_user_input:
-            input("Press Enter to exit...")
-        sys.exit(1)
+        raise MissingAPIKeyError("clipdrop")
 
 
 def initialize_api_clients(
@@ -682,13 +675,11 @@ def send_and_receive_message(
             temperature=temperature,
         )
     except RateLimitError:
-        termcolor.cprint(traceback.format_exc(), "red")
         termcolor.cprint(
-            "Did you setup payment? See <https://openai.com/pricing>", "cyan"
+            "hint: Did you setup payment? See <https://openai.com/pricing>",
+            "cyan",
         )
-        # We don't re-raise the exception, because we want the hint^ to be
-        # below the traceback
-        sys.exit(1)
+        raise
 
     return chat_response.choices[0].message.content
 
@@ -847,11 +838,6 @@ def image_generation_request(
         virtual_image_file.write(image_data)
 
     elif platform == "stability":
-        if not stability_api:
-            raise ValueError(
-                "Could not initialize the Stability API! Is the API key"
-                " missing?"
-            )
         # Set up our initial generation parameters.
         stability_response = stability_api.generate(
             prompt=image_prompt,
@@ -890,12 +876,12 @@ def image_generation_request(
         )  # r.content contains the bytes of the returned image
 
     else:
-        raise ValueError(f"Invalid platform {platform!r}")
+        raise InvalidImagePlatformError(platform)
 
     try:
         return virtual_image_file
     except NameError as error:
-        raise Exception(
+        raise RuntimeError(
             "Could not generate image due to above error"
         ) from error
 
@@ -1029,7 +1015,7 @@ under certain conditions.
         api_keys = get_api_keys(args, no_user_input)
 
     # Validate api keys
-    validate_api_keys(api_keys, image_platform, no_user_input)
+    validate_api_keys(api_keys, image_platform)
     # Initialize api clients. Only get stability_api object back because
     # openai.api_key has global scope
     stability_api = initialize_api_clients(api_keys, image_platform)
@@ -1111,7 +1097,7 @@ under certain conditions.
                 meme_count = int(user_entered_count)
 
     # Get full path of font file from font file name
-    font_file = check_font(font_file_name, no_user_input)
+    font_file = check_font(font_file_name)
 
     def single_meme_generation_loop() -> Optional[FullMeme]:
         # Send request to chat bot to generate meme text and image prompt
