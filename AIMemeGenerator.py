@@ -72,7 +72,7 @@ class MemeGeneratorError(RuntimeError):
     """Base class for all AIMemeGenerator exceptions."""
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class NoFontFileError(MemeGeneratorError):
     """Could not find the font file."""
 
@@ -86,7 +86,7 @@ class NoFontFileError(MemeGeneratorError):
         )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class MissingAPIKeyError(MemeGeneratorError):
     """A required API key is missing."""
 
@@ -104,7 +104,7 @@ class MissingAPIKeyError(MemeGeneratorError):
         )
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class InvalidImagePlatformError(MemeGeneratorError):
     """Invalid image platform."""
 
@@ -114,7 +114,7 @@ class InvalidImagePlatformError(MemeGeneratorError):
         return f"Invalid image platform {self.image_platform!r}."
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class APIKeys:
     """
     The API keys.
@@ -130,7 +130,7 @@ class APIKeys:
     stability_key: Optional[str]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class Meme:
     """
     A dictionary containing the meme's text and image prompt.
@@ -144,7 +144,7 @@ class Meme:
     image_prompt: str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass
 class FullMeme:
     """
     A full meme.

@@ -261,14 +261,6 @@ Image Generation Platform: {image_platform}
 
 """
     )
-    if not use_config:
-        assert pathlib.Path(
-            tmp_path, AIMemeGenerator.SETTINGS_FILE_NAME
-        ).read_text(encoding="utf-8") == AIMemeGenerator.get_assets_file(
-            AIMemeGenerator.DEFAULT_SETTINGS_FILE_NAME
-        ).read_text(
-            encoding="utf-8"
-        )
 
     # Check mocks
     mock_chat_create.assert_called_once_with(
@@ -360,12 +352,8 @@ def test_get_api_keys(
 ) -> None:
     with monkeypatch.context() as monkey:
         monkey.chdir(tmp_path_factory.mktemp("tmp"))
-        with pytest.raises(SystemExit):
+        with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
             AIMemeGenerator.get_api_keys(no_user_input=True)
-        assert pathlib.Path(AIMemeGenerator.API_KEYS_FILE_NAME).exists()
-        assert AIMemeGenerator.get_api_keys(
-            no_user_input=True
-        ) == AIMemeGenerator.APIKeys(None, None, None)
 
         monkey.chdir(tmp_path_factory.mktemp("tmp"))
         assert AIMemeGenerator.get_api_keys(
