@@ -1171,15 +1171,29 @@ under certain conditions.
     meme_results_dicts_list: List[FullMeme] = []
 
     for number in range(1, meme_count + 1):
-        termcolor.cprint("-" * shutil.get_terminal_size().columns, "blue")
-        termcolor.cprint(
-            f"Generating meme {number} of {meme_count}...", "cyan"
-        )
-        meme_info_dict = single_meme_generation_loop()
+        while True:
+            termcolor.cprint("-" * shutil.get_terminal_size().columns, "blue")
+            termcolor.cprint(
+                f"Generating meme {number} of {meme_count}...", "cyan"
+            )
+            try:
+                meme_info_dict = single_meme_generation_loop()
+            except Exception:  # noqa: PERF203
+                termcolor.cprint("Error while generating the meme:", "red")
+                if no_user_input:
+                    raise
+                termcolor.cprint(traceback.format_exc(), "red")
+                task = input("Abort, retry, skip? [A/r/s] ").lower()
+                if task == "r":
+                    continue
+                if task == "s":
+                    break
+                sys.exit(1)
 
-        # Add meme info dict to list of meme results
-        if meme_info_dict:
-            meme_results_dicts_list.append(meme_info_dict)
+            # Add meme info dict to list of meme results
+            if meme_info_dict:
+                meme_results_dicts_list.append(meme_info_dict)
+            break
 
     # If called from command line, will return the list of meme results
     return meme_results_dicts_list
