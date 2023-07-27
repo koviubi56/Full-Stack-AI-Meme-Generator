@@ -687,24 +687,30 @@ def send_and_receive_message(
                     "hint: You do not have access to the GPT-4 model yet.",
                     "cyan",
                 )
-                print(
+                termcolor.cprint(
                     "hint: You can see more about the current GPT-4"
                     " requirements here: <https://help.openai.com/en/articles"
                     "/7102672-how-can-i-access-gpt-4>",
                     "cyan",
                 )
-                print(
+                termcolor.cprint(
                     "hint: Also ensure your country is supported:"
                     " <https://platform.openai.com/docs/supported-countries>",
                     "cyan",
                 )
+                termcolor.cprint(
+                    "hint: You can try the 'gpt-3.5-turbo' model instead. See"
+                    " more here: <https://platform.openai.com/docs/models"
+                    "/overview>",
+                    "cyan",
+                )
             else:
-                print(
+                termcolor.cprint(
                     "hint: Either the model name is incorrect, or you do not"
                     " have access to it.",
                     "cyan",
                 )
-                print(
+                termcolor.cprint(
                     "hint: See this page to see the model names to use in the"
                     " API: <https://platform.openai.com/docs/models/overview>",
                     "cyan",
