@@ -90,9 +90,14 @@ class NoFontFileError(MemeGeneratorError):
 class MissingAPIKeyError(MemeGeneratorError):
     """A required API key is missing."""
 
-    api: Literal["openai", "stability", "clipdrop"]
+    api: Literal["openai", "stability", "clipdrop", "ALL"]
 
     def __str__(self) -> str:
+        if self.api == "ALL":
+            return (
+                "No API keys found. Please provide one of function arguments,"
+                " command line arguments, or api keys file."
+            )
         return (
             f"{self.api} is expecting an API key, but no {self.api} API key"
             " was found in the api_keys.toml file."
@@ -348,16 +353,25 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     file = pathlib.Path(SETTINGS_FILE_NAME).resolve()
 
     if not file.exists():
-        file_to_copy_path = get_assets_file(DEFAULT_SETTINGS_FILE_NAME)
-        shutil.copyfile(file_to_copy_path, SETTINGS_FILE_NAME)
         termcolor.cprint(
-            "Settings file not found, so default"
-            f" '{SETTINGS_FILE_NAME}' file created. You can use it going"
-            " forward to change more advanced settings if you want.",
-            "cyan",
+            f"WARNING: The config file {file} does not exist!", "yellow"
         )
-        if not no_user_input:
-            input("Press Enter to continue...")
+        if (not no_user_input) and (
+            input(
+                "Create the config file with default settings? [Y/n] "
+            ).lower()
+            != "n"
+        ):
+            file_to_copy_path = get_assets_file(DEFAULT_SETTINGS_FILE_NAME)
+            shutil.copyfile(file_to_copy_path, SETTINGS_FILE_NAME)
+            termcolor.cprint(
+                f"Default {SETTINGS_FILE_NAME} file created. You can use it"
+                " going forward to change more advanced settings if you want.",
+                "cyan",
+            )
+        else:
+            termcolor.cprint("WARNING: Using default settings", "yellow")
+            return {}
 
     # Try to get settings file, if fails, use default settings
     try:
@@ -365,9 +379,9 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     except Exception:
         termcolor.cprint(traceback.format_exc(), "yellow")
         termcolor.cprint(
-            "ERROR: Could not read settings file. Using default settings"
+            "WARNING: Could not read settings file. Using default settings"
             " instead.",
-            "red",
+            "yellow",
         )
         settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
 
@@ -380,9 +394,7 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
         )
         settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
 
-    termcolor.cprint(
-        f"Config file {file} exists, using that ({settings})", "black"
-    )
+    termcolor.cprint(f"Config will be {settings}", "black")
     return settings
 
 
@@ -409,6 +421,9 @@ def get_api_keys(
 
     # Checks if any arguments are not None, and uses those values if so
     if args and any((args.openai_key, args.clipdrop_key, args.stability_key)):
+        termcolor.cprint(
+            "Getting all API keys from command line arguments...", "cyan"
+        )
         openai_key = args.openai_key if args.openai_key else openai_key
         clipdrop_key = args.clipdrop_key if args.clipdrop_key else clipdrop_key
         stability_key = (
@@ -416,8 +431,7 @@ def get_api_keys(
         )
         return APIKeys(openai_key, clipdrop_key, stability_key)
 
-    # Try to read keys from config file. Default value of '' will be used if
-    # not found
+    termcolor.cprint("Getting API keys from file...", "cyan")
     if file.exists():
         keys_dict = get_config(file).get("keys", {})
         openai_key = keys_dict.get("openai", None) or None
@@ -425,18 +439,29 @@ def get_api_keys(
         stability_key = keys_dict.get("stabilityai", None) or None
         return APIKeys(openai_key, clipdrop_key, stability_key)
 
-    # Copy default empty keys file from assets folder.
-    file_to_copy_path = get_assets_file(DEFAULT_API_KEYS_FILE_NAME)
-    shutil.copyfile(file_to_copy_path, API_KEYS_FILE_NAME)
     termcolor.cprint(
-        "Because running for the first time,"
-        f' "{API_KEYS_FILE_NAME}" was created. Please add your API keys to'
-        " the API Keys file.",
-        "cyan",
+        f"WARNING: The api keys file {file} does not exist!", "yellow"
     )
-    if not no_user_input:
-        input("Press Enter to exit...")
-    sys.exit(1)
+    if (not no_user_input) and (
+        input("Create the api keys file with default settings? [Y/n] ").lower()
+        != "n"
+    ):
+        file_to_copy_path = get_assets_file(DEFAULT_API_KEYS_FILE_NAME)
+        shutil.copyfile(file_to_copy_path, API_KEYS_FILE_NAME)
+        termcolor.cprint(
+            "Please add your API keys to the API Keys file.",
+            "cyan",
+        )
+        if not no_user_input:
+            input("Press Enter to exit...")
+        sys.exit(1)
+    termcolor.cprint(
+        "ERROR: Could not get the API keys from neither the function"
+        " arguments, the command line arguments, nor the api keys file. Please"
+        " provide one of them!",
+        "red",
+    )
+    raise MissingAPIKeyError("ALL")
 
 
 # ------------ VALIDATION ------------
@@ -1000,60 +1025,9 @@ This is free software, and you are welcome to redistribute it
 under certain conditions.
 """
     )
-    settings = get_settings(no_user_input)
-    use_config = settings.get("advanced", {}).get(
-        "use_this_config",
-        False
-        # ! This MUST be set to False!
-        # This is because get_settings() will return the default config if the
-        # config file doesn't exist, which WOULD OVERWRITE the arguments.
-    )
-    if use_config:
-        termcolor.cprint("Getting settings from config file...", "cyan")
-        text_model = settings.get("ai_settings", {}).get(
-            "text_model", text_model
-        )
-        temperature = float(  # float() is not necessary, but why not
-            settings.get("ai_settings", {}).get("temperature", temperature)
-        )
-        basic_instructions = settings.get("basic", {}).get(
-            "basic_instructions", basic_instructions
-        )
-        image_special_instructions = settings.get("basic", {}).get(
-            "image_special_instructions", image_special_instructions
-        )
-        image_platform = settings.get("ai_settings", {}).get(
-            "image_platform", image_platform
-        )
-        font_file_name = settings.get("advanced", {}).get(
-            "font_file", font_file_name
-        )
-        base_file_name = settings.get("advanced", {}).get(
-            "base_file_name", base_file_name
-        )
-        output_directory = settings.get("advanced", {}).get(
-            "output_directory", output_directory
-        )
-
-    output_directory = pathlib.Path(output_directory).resolve()
 
     # Parse the arguments
     args = parser.parse_args()
-
-    # If API Keys not provided as parameters, get them from config file or
-    # command line arguments
-    if openai_key:
-        termcolor.cprint("Getting API keys from arguments...", "cyan")
-        api_keys = APIKeys(openai_key, clipdrop_key, stability_key)
-    else:
-        termcolor.cprint("Getting API keys from file...", "cyan")
-        api_keys = get_api_keys(args, no_user_input)
-
-    # Validate api keys
-    validate_api_keys(api_keys, image_platform)
-    # Initialize api clients. Only get stability_api object back because
-    # openai.api_key has global scope
-    stability_api = initialize_api_clients(api_keys, image_platform)
 
     # Check if any settings arguments, and replace the default values with the
     # args if so. To run automated from command line, specify at least 1
@@ -1096,6 +1070,58 @@ under certain conditions.
             "Won't ask for user input according to cli arguments",
             "cyan",
         )
+    settings = get_settings(no_user_input)
+    use_config = settings.get("advanced", {}).get("use_this_config", True)
+    if use_config:
+        termcolor.cprint("Getting settings from config file...", "cyan")
+        text_model = settings.get("ai_settings", {}).get(
+            "text_model", text_model
+        )
+        temperature = float(  # float() is not necessary, but why not
+            settings.get("ai_settings", {}).get("temperature", temperature)
+        )
+        basic_instructions = settings.get("basic", {}).get(
+            "basic_instructions", basic_instructions
+        )
+        image_special_instructions = settings.get("basic", {}).get(
+            "image_special_instructions", image_special_instructions
+        )
+        image_platform = settings.get("ai_settings", {}).get(
+            "image_platform", image_platform
+        )
+        font_file_name = settings.get("advanced", {}).get(
+            "font_file", font_file_name
+        )
+        base_file_name = settings.get("advanced", {}).get(
+            "base_file_name", base_file_name
+        )
+        output_directory = settings.get("advanced", {}).get(
+            "output_directory", output_directory
+        )
+    elif pathlib.Path(SETTINGS_FILE_NAME).exists():
+        termcolor.cprint(
+            "WARNING: The config file"
+            f" {pathlib.Path(SETTINGS_FILE_NAME).resolve()} is ignored"
+            " because `use_this_config` is not set to `true`!",
+            "yellow",
+        )
+
+    output_directory = pathlib.Path(output_directory).resolve()
+
+    # If API Keys not provided as parameters, get them from config file or
+    # command line arguments
+    if openai_key:
+        termcolor.cprint("Getting API keys from function arguments...", "cyan")
+        api_keys = APIKeys(openai_key, clipdrop_key, stability_key)
+    else:
+        api_keys = get_api_keys(args, no_user_input)
+
+    # Validate api keys
+    validate_api_keys(api_keys, image_platform)
+
+    # Initialize api clients. Only get stability_api object back because
+    # openai.api_key has global scope
+    stability_api = initialize_api_clients(api_keys, image_platform)
 
     system_prompt = construct_system_prompt(
         basic_instructions, image_special_instructions
@@ -1204,6 +1230,11 @@ under certain conditions.
                 if no_user_input:
                     raise
                 termcolor.cprint(traceback.format_exc(), "red")
+                if no_user_input:
+                    termcolor.cprint(
+                        "WARNING: Skipping this meme...", "yellow"
+                    )
+                    break
                 task = input("Abort, retry, skip? [A/r/s] ").lower()
                 if task == "r":
                     continue
@@ -1226,9 +1257,14 @@ if __name__ == "__main__":
     except Exception:
         termcolor.cprint(traceback.format_exc(), "red")
         termcolor.cprint(
-            "Please read the above error message! If you think this is a bug,"
-            " please report it on GitHub including the **entire** above"
-            " traceback.",
+            "Please read the above error message! **If** you think this is a"
+            " **bug**, please report it on GitHub including the **entire**"
+            " above traceback.",
             "yellow",
         )
-        input("Press Enter to exit...")
+        try:
+            input("Press Enter to exit...")
+        except Exception:
+            # If we can't use input (maybe we were ran in some automated system
+            # that doesn't allow input) then just re-raise it
+            raise

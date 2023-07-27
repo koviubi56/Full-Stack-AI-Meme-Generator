@@ -1,5 +1,4 @@
 #----------------------------------------- Basic Section -----------------------------------------
-# !*!*!*!*!*!*!*!*!*!*!! AT THE END OF THE FILE SET use_this_config TO true !!*!*!*!*!*!*!*!*!*!*!
 
 [basic]
 
@@ -54,6 +53,5 @@ base_file_name = "meme"
 output_directory = "Outputs"
 
 # true/false - Determines if the current config should be used.
-# ! IMPORTANT: Set this to true!!!
-# Default: false
-use_this_config = false
+# Default: true
+use_this_config = true
