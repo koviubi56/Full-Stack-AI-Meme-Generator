@@ -74,4 +74,4 @@ You can also pass options into the program via command-line arguments whether us
 
 - `--no-user-input`: If specified, this will prevent any user input prompts, and will instead use default values or other arguments.
 
-- `--no-file-save`: If specified, the meme will not be saved to a file, and only returned as virtual file part of memeResultsDictsList.
+- `--no-file-save`: If specified, the meme will not be saved to a file, and only returned as virtual file.
