@@ -40,7 +40,6 @@ import platform
 import re
 import shutil
 import sys
-import textwrap
 import time
 import traceback
 from typing import Any, Dict, Iterable, List, Literal, Optional, Union
@@ -781,48 +780,6 @@ def set_file_path(
     return pathlib.Path(output_directory, f"{base_name}_{timestamp}.png")
 
 
-def write_log_file(
-    user_prompt: str,
-    ai_meme: Meme,
-    file: pathlib.Path,
-    log_directory: pathlib.Path,
-    basic: str,
-    special: str,
-    platform: str,
-) -> None:
-    """
-    Write or append log file containing the user user message, chat bot meme
-    text, and chat bot image prompt for each meme.
-
-    Args:
-        user_prompt (str): The user prompt.
-        ai_meme (Meme): The AI meme.
-        file (pathlib.Path): The meme file.
-        log_directory (pathlib.Path): The log directory.
-        basic (str): The basic AI instruction.
-        special (str): The special AI instruction.
-        platform (str): The image generation platform.
-    """
-    # Get file name from path
-    meme_file_name = file.name
-    with log_directory.joinpath("log.txt").open(
-        "a", encoding="utf-8"
-    ) as log_file:
-        log_file.write(
-            textwrap.dedent(
-                f"""
-                Meme File Name: {meme_file_name}
-                AI Basic Instructions: {basic}
-                AI Special Image Instructions: {special}
-                User Prompt: '{user_prompt}'
-                Chat Bot Meme Text: {ai_meme.meme_text}
-                Chat Bot Image Prompt: {ai_meme.image_prompt}
-                Image Generation Platform: {platform}
-                \n"""
-            )
-        )
-
-
 def construct_system_prompt(
     basic_instructions: str, image_special_instructions: str
 ) -> str:
@@ -1330,17 +1287,6 @@ under certain conditions.
             no_file_save=no_file_save,
             font_file=font_file,
         )
-        if not no_file_save:
-            # Write the user message, meme text, and image prompt to a log file
-            write_log_file(
-                user_entered_prompt,
-                meme,
-                file,
-                output_directory,
-                basic_instructions,
-                image_special_instructions,
-                image_platform,
-            )
 
         termcolor.cprint("  Done!", "cyan")
         return FullMeme(meme_text, image_prompt, virtual_meme_file, file)
