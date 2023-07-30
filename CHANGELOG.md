@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0-beta.1] - 2023-07-30
+
 ### Added
 
 - `678605f3eeac8c92b6d7b6acfb19515f72ffdbd7` **! Added GPT4All as a text generation service.**
