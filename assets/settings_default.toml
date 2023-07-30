@@ -3,22 +3,33 @@
 [basic]
 
 # This is NOT the individual meme image prompt. Here you can change this to tell it the general style or qualities to apply to all memes, such as using dark humor, surreal humor, wholesome, etc. 
-# Default: "You will create funny memes that are clever and original, and not cliche or lame."
-basic_instructions = "You will create funny memes that are clever and original, and not cliche or lame."
+# Default: "You should come up with some random funny memes that are clever and original, and not cliche or lame."
+basic_instructions = "You should come up with some random funny memes that are clever and original, and not cliche or lame."
 
 # You can use this to tell it how to generate the image itself. You can specify a style such as being a photograph, drawing, etc, or something more specific such as always use cats in the pictures.
-# Default: "The images should be photographic."
-image_special_instructions = "The images should be photographic."
+# Default: "The images should be photographic and related to the meme."
+image_special_instructions = "The images should be photographic and related to the meme."
 
 
 #----------------------------------------- AI Settings Section -----------------------------------------
 
 [ai_settings]
 
-# The model used by OpenAI to generate the text.
-# Default and recommended is GPT-4. Other possible options include "gpt-3.5-turbo-16k"
-# Default is "gpt-3.5-turbo" because everyone can access it. If you have access, GPT-4 is recommended. 
-# See this page for more info about the other models: <https://platform.openai.com/docs/quickstart>
+# The service to use for text generation.
+# Possible Values: "openai", "gpt4all"
+# ! WARNING: By using GPT4All an 8 GB AI model will be downloaded (will be cached at ~/.cache)! Running it requires* 8 GB of RAM, and it can be ~2 minutes/meme!
+# *: The AI model runs decently on 4 GB of RAM.
+# If you use GPT4All, don't forget to change the text_model!
+# Default is "openai"
+text_generation_service = "openai"
+
+# The model used by OpenAI/GPT4All to generate the text.
+# For text_generation_service = "openai"
+#     Default and recommended is GPT-4. Other possible options include "gpt-3.5-turbo-16k"
+#     Default is "gpt-3.5-turbo" because everyone can access it. If you have access, GPT-4 is recommended. 
+#     See this page for more info about the other models: <https://platform.openai.com/docs/quickstart>
+# For text_generation_service = "gpt4all"
+#     Quite a few models have been tested, but the only one found to actually work is "ggml-model-gpt4all-falcon-q4_0.bin". Using any other model probably won't work!
 text_model = "gpt-3.5-turbo"
 
 # Controls the randomness of the AI text generation.

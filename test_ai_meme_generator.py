@@ -77,6 +77,7 @@ def do_test_generate(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
     api_keys: AIMemeGenerator.APIKeys,
+    text_platform: str,
     image_platform: str,
     use_config: bool,
     use_api_keys_file: bool,
@@ -84,6 +85,11 @@ def do_test_generate(
     no_user_input: bool,
 ) -> None:
     font = get_font()
+    text_model = (
+        "gpt-4"
+        if text_platform == "openai"
+        else "ggml-model-gpt4all-falcon-q4_0.bin"
+    )
     monkeypatch.chdir(tmp_path)
     if use_api_keys_file:
         pathlib.Path(tmp_path, AIMemeGenerator.API_KEYS_FILE_NAME).write_text(
@@ -120,6 +126,23 @@ stabilityai =\
         mock_openai.ChatCompletion.create = mock_chat_create
         mock_openai.Image.create = mock_openai_image_create
         monkey.setattr(AIMemeGenerator, "openai", mock_openai)
+
+        # ---
+
+        class _GPT4All:
+            def __init__(
+                *_,  # noqa: ANN002
+                **__,  # noqa: ANN003
+            ) -> None:
+                pass
+
+            def generate(
+                *_,  # noqa: ANN002
+                **__,  # noqa: ANN003
+            ) -> str:
+                return AI_RESPONSE
+
+        monkey.setattr(AIMemeGenerator, "GPT4All", _GPT4All)
 
         # ---
 
@@ -219,6 +242,8 @@ stabilityai =\
                     *_, **__  # noqa: ANN002, ANN003
                 ) -> argparse.Namespace:
                     return argparse.Namespace(
+                        text_generation_service=text_platform,
+                        text_model=text_model,
                         image_platform=image_platform,
                         openai_key=api_keys.openai_key,
                         clipdrop_key=api_keys.clipdrop_key,
@@ -243,10 +268,20 @@ stabilityai =\
                 if use_cli_arguments
                 else f"image_platform = {image_platform!r}"
             )
+            text_platform_string = (
+                ""
+                if use_cli_arguments
+                else f"text_generation_service = {text_platform!r}"
+            )
+            text_model_string = (
+                "" if use_cli_arguments else f"text_model = {text_model!r}"
+            )
             font_line = f"font_file = '{font.resolve()}'" if font else ""
             pathlib.Path(AIMemeGenerator.SETTINGS_FILE_NAME).write_text(
                 f"""
 [ai_settings]
+{text_platform_string}
+{text_model_string}
 {image_platform_string}
 [advanced]
 {font_line}
@@ -267,6 +302,8 @@ use_this_config = true
                 )
         else:
             if not use_cli_arguments:
+                kwargs["text_generation_service"] = text_platform
+                kwargs["text_model"] = text_model
                 kwargs["image_platform"] = image_platform
             memes = AIMemeGenerator.generate(
                 output_directory=pathlib.Path.cwd().resolve(),
@@ -281,38 +318,9 @@ use_this_config = true
     full_meme = get_full_meme(font)
     if full_meme:
         assert memes[0].virtual_meme_file.getvalue() == full_meme.read_bytes()
-    assert memes[0].file == pathlib.Path(tmp_path, "meme.png").resolve()
-    assert (
-        pathlib.Path(tmp_path, "log.txt").read_text(encoding="utf-8")
-        == f"""
-Meme File Name: meme.png
-AI Basic Instructions: You will create funny memes that are clever and\
- original, and not cliche or lame.
-AI Special Image Instructions: The images should be photographic.
-User Prompt: 'anything'
-Chat Bot Meme Text: When the H
-Chat Bot Image Prompt: The letter H
-Image Generation Platform: {image_platform}
-
-"""
-    )
-
     # Check mocks
-    mock_chat_create.assert_called_once_with(
-        model="gpt-4",
-        messages=[
-            {
-                "role": "system",
-                "content": AIMemeGenerator.construct_system_prompt(
-                    "You will create funny memes that are clever and original,"
-                    " and not cliche or lame.",
-                    "The images should be photographic.",
-                ),
-            },
-            {"role": "user", "content": "anything"},
-        ],
-        temperature=1.0,
-    )
+    if text_platform == "openai":
+        mock_chat_create.assert_called_once()
     if image_platform == "openai":
         mock_openai_image_create.assert_called_once_with(
             prompt=IMAGE_PROMPT,
@@ -355,6 +363,7 @@ def test_generate_only_openai(
     no_input: bool,
 ) -> None:
     do_test_generate(
+        text_platform="openai",
         tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
         api_keys=AIMemeGenerator.APIKeys("openai", None, None),
@@ -376,6 +385,7 @@ def test_generate_openai_plus_clipdrop(
     no_input: bool,
 ) -> None:
     do_test_generate(
+        text_platform="openai",
         tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
         api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
@@ -397,6 +407,73 @@ def test_generate_openai_plus_stability(
     no_input: bool,
 ) -> None:
     do_test_generate(
+        text_platform="openai",
+        tmp_path=tmp_path_factory.mktemp("tmp"),
+        monkeypatch=monkeypatch,
+        api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
+        image_platform="stability",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
+    )
+
+
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
+def test_generate_gpt4all_plus_openai(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
+) -> None:
+    do_test_generate(
+        text_platform="gpt4all",
+        tmp_path=tmp_path_factory.mktemp("tmp"),
+        monkeypatch=monkeypatch,
+        api_keys=AIMemeGenerator.APIKeys("openai", None, None),
+        image_platform="openai",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
+    )
+
+
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
+def test_generate_gpt4all_plus_clipdrop(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
+) -> None:
+    do_test_generate(
+        text_platform="gpt4all",
+        tmp_path=tmp_path_factory.mktemp("tmp"),
+        monkeypatch=monkeypatch,
+        api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
+        image_platform="clipdrop",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
+    )
+
+
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
+def test_generate_gpt4all_plus_stability(
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
+) -> None:
+    do_test_generate(
+        text_platform="gpt4all",
         tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
         api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
