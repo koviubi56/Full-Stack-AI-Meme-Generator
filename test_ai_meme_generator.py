@@ -105,6 +105,7 @@ stabilityai =\
         }
     else:
         kwargs = {}
+
     with monkeypatch.context() as monkey:
         mock_message = MagicMock()
         mock_message.choices[0].message.content = AI_RESPONSE
@@ -324,73 +325,86 @@ Image Generation Platform: {image_platform}
     mock_file.assert_called_once_with("meme", tmp_path.resolve())
 
 
-def do_test_generate_four_times(
-    *,
+BIG_LIST = [
+    (False, False, False, False),
+    (False, False, False, True),
+    (False, False, True, False),
+    (False, False, True, True),
+    (False, True, False, False),
+    (False, True, False, True),
+    (False, True, True, False),
+    (False, True, True, True),
+    (True, False, False, False),
+    (True, False, False, True),
+    (True, False, True, False),
+    (True, False, True, True),
+    (True, True, False, False),
+    (True, True, False, True),
+    (True, True, True, False),
+    (True, True, True, True),
+]
+
+
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
+def test_generate_only_openai(
     tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
-    api_keys: AIMemeGenerator.APIKeys,
-    image_platform: str,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
 ) -> None:
-    for config, keys, cli, no_input in [
-        (False, False, False, False),
-        (False, False, False, True),
-        (False, False, True, False),
-        (False, False, True, True),
-        (False, True, False, False),
-        (False, True, False, True),
-        (False, True, True, False),
-        (False, True, True, True),
-        (True, False, False, False),
-        (True, False, False, True),
-        (True, False, True, False),
-        (True, False, True, True),
-        (True, True, False, False),
-        (True, True, False, True),
-        (True, True, True, False),
-        (True, True, True, True),
-    ]:
-        do_test_generate(
-            tmp_path=tmp_path_factory.mktemp("tmp"),
-            monkeypatch=monkeypatch,
-            api_keys=api_keys,
-            image_platform=image_platform,
-            use_config=config,
-            use_api_keys_file=keys,
-            use_cli_arguments=cli,
-            no_user_input=no_input,
-        )
-
-
-def test_generate_only_openai(
-    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    do_test_generate_four_times(
-        tmp_path_factory=tmp_path_factory,
+    do_test_generate(
+        tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
-        image_platform="openai",
         api_keys=AIMemeGenerator.APIKeys("openai", None, None),
+        image_platform="openai",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
     )
 
 
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
 def test_generate_openai_plus_clipdrop(
-    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
 ) -> None:
-    do_test_generate_four_times(
-        tmp_path_factory=tmp_path_factory,
+    do_test_generate(
+        tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
-        image_platform="clipdrop",
         api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
+        image_platform="clipdrop",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
     )
 
 
+@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
 def test_generate_openai_plus_stability(
-    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    config: bool,
+    keys: bool,
+    cli: bool,
+    no_input: bool,
 ) -> None:
-    do_test_generate_four_times(
-        tmp_path_factory=tmp_path_factory,
+    do_test_generate(
+        tmp_path=tmp_path_factory.mktemp("tmp"),
         monkeypatch=monkeypatch,
-        image_platform="stability",
         api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
+        image_platform="stability",
+        use_config=config,
+        use_api_keys_file=keys,
+        use_cli_arguments=cli,
+        no_user_input=no_input,
     )
 
 
@@ -424,115 +438,6 @@ def test_get_api_keys(
         ),
         no_user_input=True,
     ) == AIMemeGenerator.APIKeys("openai", "clipdrop", "stability")
-
-
-def test_validate_api_keys() -> None:
-    with pytest.raises(AIMemeGenerator.InvalidImagePlatformError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "openai",
-                None,
-                None,
-            ),
-            "asdf",
-        )
-
-    # ---
-
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                None,  # type: ignore  # noqa: PGH003
-                None,
-                None,
-            ),
-            "openai",
-        )
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "",
-                None,
-                None,
-            ),
-            "openai",
-        )
-    AIMemeGenerator.validate_api_keys(
-        AIMemeGenerator.APIKeys(
-            "openai",
-            None,
-            None,
-        ),
-        "openai",
-    )
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "openai",
-                None,
-                None,
-            ),
-            "clipdrop",
-        )
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "openai",
-                None,
-                None,
-            ),
-            "stability",
-        )
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "openai",
-                None,
-                "stability",
-            ),
-            "clipdrop",
-        )
-    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-        AIMemeGenerator.validate_api_keys(
-            AIMemeGenerator.APIKeys(
-                "openai",
-                "clipdrop",
-                None,
-            ),
-            "stability",
-        )
-    AIMemeGenerator.validate_api_keys(
-        AIMemeGenerator.APIKeys(
-            "openai",
-            "clipdrop",
-            None,
-        ),
-        "clipdrop",
-    )
-    AIMemeGenerator.validate_api_keys(
-        AIMemeGenerator.APIKeys(
-            "openai",
-            None,
-            "stability",
-        ),
-        "stability",
-    )
-    AIMemeGenerator.validate_api_keys(
-        AIMemeGenerator.APIKeys(
-            "openai",
-            "clipdrop",
-            "stability",
-        ),
-        "clipdrop",
-    )
-    AIMemeGenerator.validate_api_keys(
-        AIMemeGenerator.APIKeys(
-            "openai",
-            "clipdrop",
-            "stability",
-        ),
-        "stability",
-    )
 
 
 def test_check_font() -> None:

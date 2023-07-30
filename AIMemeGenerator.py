@@ -28,6 +28,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # SPDX-License-Identifier: GPL-3.0-or-later
 __version__ = "1.0.1"
 
+import abc
 import argparse
 import base64
 import dataclasses
@@ -93,8 +94,6 @@ FORMAT_INSTRUCTIONS = (
     " but interpret as best as possible: {} | Now come up with a meme"
     " according to the previous instructions! "
 )
-
-# =============================================================================
 
 
 class MemeGeneratorError(RuntimeError):
@@ -191,7 +190,6 @@ class FullMeme:
     file: pathlib.Path
 
 
-# ============================= Argument Parser ===============================
 # Parse the arguments at the start of the script
 parser = argparse.ArgumentParser()
 parser.add_argument("--openai-key", help="OpenAI API key")
@@ -242,9 +240,6 @@ parser.add_argument(
     help="If specified, the meme will not be saved to a file, and only"
     " returned as virtual file part of memeResultsDictsList.",
 )
-
-
-# ==================== Run Checks and Import Configs  =========================
 
 
 def search_for_file(
@@ -418,6 +413,205 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     return settings
 
 
+@dataclasses.dataclass
+class TextABC(abc.ABC):
+    user_entered_prompt: str
+    basic_instructions: str
+    image_special_instructions: str
+
+    @abc.abstractmethod
+    def generate_response(self) -> str:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def initialize(self) -> None:
+        return  # kinda optional; not gonna raise
+
+
+@dataclasses.dataclass
+class OpenAIText(TextABC):
+    api_key: str
+    text_model: str
+    temperature: float
+
+    def initialize(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError("openai")
+        openai.api_key = self.api_key
+        system_prompt = construct_system_prompt(
+            self.basic_instructions, self.image_special_instructions
+        )
+        self.conversation = [{"role": "system", "content": system_prompt}]
+
+    def generate_response(self) -> str:
+        # Prepare to send request along with context by appending user message
+        # to previous conversation
+        self.conversation.append(
+            {"role": "user", "content": self.user_entered_prompt}
+        )
+
+        termcolor.cprint(
+            f"  Sending request to write meme to model {self.text_model}...",
+            "cyan",
+        )
+        try:
+            chat_response = openai.ChatCompletion.create(
+                model=self.text_model,
+                messages=self.conversation,
+                temperature=self.temperature,
+            )
+        except RateLimitError:
+            termcolor.cprint(
+                "\nERROR! See below hint and traceback!", "yellow"
+            )
+            termcolor.cprint(
+                "hint: Did you setup payment? See <https://openai.com/pricing>",
+                "cyan",
+            )
+            raise
+        except InvalidRequestError as error:
+            termcolor.cprint(
+                "\nERROR! See below hint and traceback!", "yellow"
+            )
+            if "The model" in str(error) and "does not exist" in str(error):
+                if str(error) == "The model `gpt-4` does not exist":
+                    termcolor.cprint(
+                        "hint: You do not have access to the GPT-4 model yet.",
+                        "cyan",
+                    )
+                    termcolor.cprint(
+                        "hint: You can see more about the current GPT-4"
+                        " requirements here: <https://help.openai.com/en/articles"
+                        "/7102672-how-can-i-access-gpt-4>",
+                        "cyan",
+                    )
+                    termcolor.cprint(
+                        "hint: Also ensure your country is supported:"
+                        " <https://platform.openai.com/docs/supported-countries>",
+                        "cyan",
+                    )
+                    termcolor.cprint(
+                        "hint: You can try the 'gpt-3.5-turbo' model instead."
+                        " See more here: <https://platform.openai.com/docs"
+                        "/models/overview>",
+                        "cyan",
+                    )
+                else:
+                    termcolor.cprint(
+                        "hint: Either the model name is incorrect, or you do"
+                        " not have access to it.",
+                        "cyan",
+                    )
+                    termcolor.cprint(
+                        "hint: See this page to see the model names to use in"
+                        " the API: <https://platform.openai.com/docs/models/overview>",
+                        "cyan",
+                    )
+            raise
+
+        return chat_response.choices[0].message.content
+
+
+@dataclasses.dataclass
+class ImageABC(abc.ABC):
+    image_prompt: str
+
+    @abc.abstractmethod
+    def generate_image(self) -> io.BytesIO:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def initialize(self) -> None:
+        return  # kinda optional; not gonna raise
+
+    @classmethod
+    def create_initialize_and_generate(cls, **kwargs: Any) -> io.BytesIO:
+        instance = cls(**kwargs)
+        instance.initialize()
+        return instance.generate_image()
+
+
+@dataclasses.dataclass
+class OpenAIImage(ImageABC):
+    api_key: str
+
+    def initialize(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError("openai")
+        openai.api_key = self.api_key
+
+    def generate_image(self) -> io.BytesIO:
+        openai_response = openai.Image.create(
+            prompt=self.image_prompt,
+            n=1,
+            size="512x512",
+            response_format="b64_json",
+        )
+        # Convert image data to virtual file
+        return io.BytesIO(
+            base64.b64decode(openai_response["data"][0]["b64_json"])
+        )
+
+
+@dataclasses.dataclass
+class StabilityImage(ImageABC):
+    api_key: str
+
+    def initialize(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError("stability")
+        self.stability_api = client.StabilityInference(
+            key=self.api_key,
+            verbose=True,
+            engine="stable-diffusion-xl-1024-v0-9",
+        )
+
+    def generate_image(self) -> io.BytesIO:
+        # Set up our initial generation parameters.
+        stability_response = self.stability_api.generate(
+            prompt=self.image_prompt,
+            steps=30,
+            cfg_scale=7.0,
+            width=1024,
+            height=1024,
+            samples=1,
+            sampler=generation.SAMPLER_K_DPMPP_2M,
+        )
+
+        # Set up our warning to print to the console if the adult content
+        # classifier is tripped. If adult content classifier is not tripped,
+        # save generated images.
+        for resp in stability_response:
+            for artifact in resp.artifacts:
+                if artifact.finish_reason == generation.FILTER:
+                    raise ValueError(
+                        "Your request activated the API's safety filters and"
+                        " could not be processed. Please modify the prompt and"
+                        " try again."
+                    )
+                return io.BytesIO(artifact.binary)
+        raise NotImplementedError("\\U0001f480")  # :skull:
+
+
+@dataclasses.dataclass
+class ClipdropImage(ImageABC):
+    api_key: str
+
+    def initialize(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError("clipdrop")
+
+    def generate_image(self) -> io.BytesIO:
+        r = requests.post(
+            "https://clipdrop-api.co/text-to-image/v1",
+            files={"prompt": (None, self.image_prompt, "text/plain")},
+            headers={"x-api-key": self.api_key},
+            timeout=60,
+        )
+        r.raise_for_status()
+        return io.BytesIO(r.content)
+
+
 def get_api_keys(
     args: Optional[argparse.Namespace] = None, no_user_input: bool = False
 ) -> APIKeys:
@@ -481,67 +675,6 @@ def get_api_keys(
         "red",
     )
     raise MissingAPIKeyError("ALL")
-
-
-# ------------ VALIDATION ------------
-
-
-def validate_api_keys(
-    api_keys: APIKeys,
-    image_platform: str,
-) -> None:
-    """
-    Validate `api_keys`.
-
-    Args:
-        api_keys (APIKeys): The API keys.
-        image_platform (str): The image platform to use.
-        no_user_input (bool): Don't ask for user input
-    """
-    termcolor.cprint("Validating the API keys...", "black")
-    if not api_keys.openai_key:
-        raise MissingAPIKeyError("openai")
-
-    valid_image_platforms = ["openai", "stability", "clipdrop"]
-    image_platform = image_platform.lower()
-
-    if image_platform not in valid_image_platforms:
-        raise InvalidImagePlatformError(image_platform)
-    if image_platform == "stability" and not api_keys.stability_key:
-        raise MissingAPIKeyError("stability")
-    if image_platform == "clipdrop" and not api_keys.clipdrop_key:
-        raise MissingAPIKeyError("clipdrop")
-
-
-def initialize_api_clients(
-    api_keys: APIKeys, image_platform: str
-) -> Optional[client.StabilityInference]:
-    """
-    Initialize the API clients.
-
-    Args:
-        api_keys (APIKeys): The API keys.
-        image_platform (str): The image platform to use.
-
-    Returns:
-        Optional[client.StabilityInference]: If the stability API key is
-        provided and the image platform is stability, return the stability
-        interface, otherwise None.
-    """
-    termcolor.cprint("Initializing API clients...", "black")
-    if api_keys.openai_key:
-        openai.api_key = api_keys.openai_key
-
-    if api_keys.stability_key and image_platform.lower() == "stability":
-        return client.StabilityInference(
-            key=api_keys.stability_key,  # API Key reference.
-            verbose=True,  # Print debug messages.
-            engine="stable-diffusion-xl-1024-v0-9",
-        )
-    return None
-
-
-# ================================== Functions ================================
 
 
 def set_file_path(
@@ -638,7 +771,7 @@ def parse_meme(message: str) -> Optional[Meme]:
         Optional[MemeDict]: The meme dictionary or None.
     """
     # The regex pattern to match
-    pattern = r"Meme Text: (\"(.*?)\"|(.*?))\n*\s*Image Prompt: (.*?)$"
+    pattern = r"\s*Meme Text: (\"(.*?)\"|(.*?))\s*Image Prompt: (.*?)$"
 
     match = re.search(pattern, message, re.DOTALL)
 
@@ -651,87 +784,6 @@ def parse_meme(message: str) -> Optional[Meme]:
 
         return Meme(meme_text=meme_text, image_prompt=match.group(4))
     return None
-
-
-def send_and_receive_message(
-    text_model: str,
-    user_message: str,
-    conversation_temp: List[Dict[str, str]],
-    temperature: float = 1.0,
-) -> str:
-    """
-    Sends the user message to the chat bot and returns the chat bot's response.
-
-    Args:
-        text_model (str): The text model to use.
-        user_message (str): The user message.
-        conversation_temp (List[Dict[str, str]]): Messages.
-        temperature (float, optional): The temperature (randomness). Defaults
-        to 1.0.
-
-    Returns:
-        str: The AI's response
-    """
-    # Prepare to send request along with context by appending user message to
-    # previous conversation
-    conversation_temp.append({"role": "user", "content": user_message})
-
-    termcolor.cprint(
-        f"  Sending request to write meme to model {text_model}...",
-        "cyan",
-    )
-    try:
-        chat_response = openai.ChatCompletion.create(
-            model=text_model,
-            messages=conversation_temp,
-            temperature=temperature,
-        )
-    except RateLimitError:
-        termcolor.cprint("\nERROR! See below hint and traceback!", "yellow")
-        termcolor.cprint(
-            "hint: Did you setup payment? See <https://openai.com/pricing>",
-            "cyan",
-        )
-        raise
-    except InvalidRequestError as error:
-        termcolor.cprint("\nERROR! See below hint and traceback!", "yellow")
-        if "The model" in str(error) and "does not exist" in str(error):
-            if str(error) == "The model `gpt-4` does not exist":
-                termcolor.cprint(
-                    "hint: You do not have access to the GPT-4 model yet.",
-                    "cyan",
-                )
-                termcolor.cprint(
-                    "hint: You can see more about the current GPT-4"
-                    " requirements here: <https://help.openai.com/en/articles"
-                    "/7102672-how-can-i-access-gpt-4>",
-                    "cyan",
-                )
-                termcolor.cprint(
-                    "hint: Also ensure your country is supported:"
-                    " <https://platform.openai.com/docs/supported-countries>",
-                    "cyan",
-                )
-                termcolor.cprint(
-                    "hint: You can try the 'gpt-3.5-turbo' model instead. See"
-                    " more here: <https://platform.openai.com/docs/models"
-                    "/overview>",
-                    "cyan",
-                )
-            else:
-                termcolor.cprint(
-                    "hint: Either the model name is incorrect, or you do not"
-                    " have access to it.",
-                    "cyan",
-                )
-                termcolor.cprint(
-                    "hint: See this page to see the model names to use in the"
-                    " API: <https://platform.openai.com/docs/models/overview>",
-                    "cyan",
-                )
-        raise
-
-    return chat_response.choices[0].message.content
 
 
 def create_meme(
@@ -852,7 +904,6 @@ def image_generation_request(
     api_keys: APIKeys,
     image_prompt: str,
     platform: str,
-    stability_api: Optional[client.StabilityInference] = None,
 ) -> io.BytesIO:
     """
     Create the image.
@@ -875,62 +926,21 @@ def image_generation_request(
         io.BytesIO: The virtual image file.
     """
     if platform == "openai":
-        openai_response = openai.Image.create(
-            prompt=image_prompt,
-            n=1,
-            size="512x512",
-            response_format="b64_json",
-        )
-        # Convert image data to virtual file
-        image_data = base64.b64decode(openai_response["data"][0]["b64_json"])
-        virtual_image_file = io.BytesIO()
-        # Write the image data to the virtual file
-        virtual_image_file.write(image_data)
-
-    elif platform == "stability":
-        # Set up our initial generation parameters.
-        stability_response = stability_api.generate(
-            prompt=image_prompt,
-            steps=30,
-            cfg_scale=7.0,
-            width=1024,
-            height=1024,
-            samples=1,
-            sampler=generation.SAMPLER_K_DPMPP_2M,
+        return OpenAIImage.create_initialize_and_generate(
+            image_prompt=image_prompt, api_key=api_keys.openai_key
         )
 
-        # Set up our warning to print to the console if the adult content
-        # classifier is tripped. If adult content classifier is not tripped,
-        # save generated images.
-        for resp in stability_response:
-            for artifact in resp.artifacts:
-                if artifact.finish_reason == generation.FILTER:
-                    raise ValueError(
-                        "Your request activated the API's safety filters and"
-                        " could not be processed. Please modify the prompt and"
-                        " try again."
-                    )
-                virtual_image_file = io.BytesIO(artifact.binary)
-
-    elif platform == "clipdrop":
-        r = requests.post(
-            "https://clipdrop-api.co/text-to-image/v1",
-            files={"prompt": (None, image_prompt, "text/plain")},
-            headers={"x-api-key": api_keys.clipdrop_key},
-            timeout=60,
+    if platform == "stability":
+        return StabilityImage.create_initialize_and_generate(
+            image_prompt=image_prompt, api_key=api_keys.stability_key
         )
-        r.raise_for_status()
-        virtual_image_file = io.BytesIO(
-            r.content
-        )  # r.content contains the bytes of the returned image
 
-    else:
-        raise InvalidImagePlatformError(platform)
+    if platform == "clipdrop":
+        return ClipdropImage.create_initialize_and_generate(
+            image_prompt=image_prompt, api_key=api_keys.clipdrop_key
+        )
 
-    return virtual_image_file
-
-
-# ==================== RUN ====================
+    raise InvalidImagePlatformError(platform)
 
 
 def generate(
@@ -1103,17 +1113,15 @@ under certain conditions.
     else:
         api_keys = get_api_keys(args, no_user_input)
 
-    # Validate api keys
-    validate_api_keys(api_keys, image_platform)
-
-    # Initialize api clients. Only get stability_api object back because
-    # openai.api_key has global scope
-    stability_api = initialize_api_clients(api_keys, image_platform)
-
-    system_prompt = construct_system_prompt(
-        basic_instructions, image_special_instructions
+    openai_instance = OpenAIText(
+        user_entered_prompt=user_entered_prompt,
+        basic_instructions=basic_instructions,
+        image_special_instructions=image_special_instructions,
+        api_key=api_keys.openai_key,
+        text_model=text_model,
+        temperature=temperature,
     )
-    conversation = [{"role": "system", "content": system_prompt}]
+    openai_instance.initialize()
 
     if not no_user_input:
         # If no user prompt argument set, get user input for prompt
@@ -1149,9 +1157,7 @@ under certain conditions.
 
     def single_meme_generation_loop() -> Optional[FullMeme]:
         # Send request to chat bot to generate meme text and image prompt
-        chat_response = send_and_receive_message(
-            text_model, user_entered_prompt, conversation, temperature
-        )
+        chat_response = openai_instance.generate_response()
 
         # Take chat message and convert to dictionary with meme_text and
         # image_prompt
@@ -1172,7 +1178,7 @@ under certain conditions.
         # (Using DALL·E API)
         termcolor.cprint("  Sending image creation request...", "cyan")
         virtual_image_file = image_generation_request(
-            api_keys, image_prompt, image_platform, stability_api
+            api_keys, image_prompt, image_platform
         )
 
         # Combine the meme text and image into a meme

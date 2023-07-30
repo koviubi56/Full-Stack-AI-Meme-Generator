@@ -1,5 +1,6 @@
 ignore = [
     "ANN101",
+    "ANN102",
     "ANN401",
     "BLE001",
     "C",
