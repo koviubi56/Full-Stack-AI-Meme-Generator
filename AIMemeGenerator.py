@@ -41,6 +41,7 @@ import re
 import shutil
 import sys
 import textwrap
+import time
 import traceback
 from typing import Any, Dict, Iterable, List, Literal, Optional, Union
 
@@ -49,6 +50,7 @@ import openai
 import requests
 import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 import termcolor
+from gpt4all import GPT4All
 from openai.error import InvalidRequestError, RateLimitError
 from PIL import Image, ImageDraw, ImageFont
 from stability_sdk import client
@@ -133,6 +135,16 @@ class MissingAPIKeyError(MemeGeneratorError):
 
 
 @dataclasses.dataclass
+class InvalidTextPlatformError(MemeGeneratorError):
+    """Invalid text platform."""
+
+    text_platform: str
+
+    def __str__(self) -> str:
+        return f"Invalid text platform {self.text_platform!r}."
+
+
+@dataclasses.dataclass
 class InvalidImagePlatformError(MemeGeneratorError):
     """Invalid image platform."""
 
@@ -192,6 +204,13 @@ class FullMeme:
 
 # Parse the arguments at the start of the script
 parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--text-generation-service",
+    help='The text generation service/platform to use. Must be one of "openai"'
+    ' or "gpt4all"',
+    choices={"openai", "gpt4all"},
+)
+parser.add_argument("--text-model", help="The text model to use")
 parser.add_argument("--openai-key", help="OpenAI API key")
 parser.add_argument("--clipdrop-key", help="ClipDrop API key")
 parser.add_argument("--stability-key", help="Stability AI API key")
@@ -210,6 +229,7 @@ parser.add_argument(
     help="The image platform to use. If using arguments and not specified, the"
     " default is 'clipdrop'. Possible options: 'openai', 'stability',"
     " 'clipdrop'",
+    choices={"openai", "stability", "clipdrop"},
 )
 parser.add_argument(
     "--temperature",
@@ -427,6 +447,12 @@ class TextABC(abc.ABC):
     def initialize(self) -> None:
         return  # kinda optional; not gonna raise
 
+    @classmethod
+    def create_initialize_and_generate(cls, **kwargs: Any) -> str:
+        instance = cls(**kwargs)
+        instance.initialize()
+        return instance.generate_response()
+
 
 @dataclasses.dataclass
 class OpenAIText(TextABC):
@@ -510,6 +536,62 @@ class OpenAIText(TextABC):
             raise
 
         return chat_response.choices[0].message.content
+
+
+@dataclasses.dataclass
+class GPT4AllText(TextABC):
+    text_model: str  # "ggml-model-gpt4all-falcon-q4_0.bin"
+    temperature: float
+
+    def initialize(self) -> None:
+        if self.text_model.startswith("gpt-"):
+            termcolor.cprint(
+                "WARNING: It looks like you forgot to change the text_model in"
+                " the config file! Please edit the config file and try again.",
+                "yellow",
+            )
+        elif self.text_model != "ggml-model-gpt4all-falcon-q4_0.bin":
+            termcolor.cprint(
+                'WARNING: Only the "ggml-model-gpt4all-falcon-q4_0.bin"'
+                " GPT4All model has been tested! Others might not work!"
+                " Proceed with caution!",
+                "yellow",
+            )
+        termcolor.cprint(
+            "WARNING! By using GPT4All an ~8 GB AI model will be downloaded"
+            " (will be cached at ~/.cache)! Running it requires* ~8 GB of RAM,"
+            " and it can be ~2 minutes/meme!"
+            "\nProceed with caution, press CTRL+C to abort!",
+            "yellow",
+        )
+        termcolor.cprint(
+            "*: The AI model runs decently on 4 GB of RAM.", "cyan"
+        )
+        _model_start = time.perf_counter()
+        self.model = GPT4All(model_name=self.text_model)
+        _model_end = time.perf_counter()
+        termcolor.cprint(
+            f"Initialized model in {_model_end - _model_start} seconds",
+            "black",
+        )
+
+    def generate_response(self) -> str:
+        termcolor.cprint(
+            "Generating meme text, please wait ~2 minutes...", "black"
+        )
+        _generate_start = time.perf_counter()
+        output = self.model.generate(
+            prompt=construct_system_prompt(
+                self.basic_instructions, self.image_special_instructions
+            ),
+            temp=self.temperature,
+        )
+        _generate_end = time.perf_counter()
+        termcolor.cprint(
+            f"Generated response in {_generate_end - _generate_start} seconds",
+            "black",
+        )
+        return output
 
 
 @dataclasses.dataclass
@@ -900,6 +982,52 @@ def create_meme(
     return virtual_meme_file
 
 
+def text_generation_request(
+    api_keys: APIKeys,
+    user_entered_prompt: str,
+    basic_instructions: str,
+    image_special_instructions: str,
+    platform: str,
+    text_model: str,
+    temperature: float,
+) -> str:
+    """
+    Create the text.
+
+    Args:
+        api_keys (APIKeys): The API keys.
+        user_entered_prompt (str): The user entered prompt.
+        basic_instructions (str): Basic instructions.
+        image_special_instructions (str): Image special instructions.
+        platform (str): The image platform to use.
+        text_model (str): The text model to use.
+        temperature (float): The temperature.
+
+    Returns:
+        str: The response.
+    """
+    if platform == "openai":
+        return OpenAIText.create_initialize_and_generate(
+            user_entered_prompt=user_entered_prompt,
+            basic_instructions=basic_instructions,
+            image_special_instructions=image_special_instructions,
+            api_key=api_keys.openai_key,
+            text_model=text_model,
+            temperature=temperature,
+        )
+
+    if platform == "gpt4all":
+        return GPT4AllText.create_initialize_and_generate(
+            user_entered_prompt=user_entered_prompt,
+            basic_instructions=basic_instructions,
+            image_special_instructions=image_special_instructions,
+            text_model=text_model,
+            temperature=temperature,
+        )
+
+    raise InvalidTextPlatformError(platform)
+
+
 def image_generation_request(
     api_keys: APIKeys,
     image_prompt: str,
@@ -912,15 +1040,6 @@ def image_generation_request(
         api_keys (APIKeys): The API keys.
         image_prompt (str): The image platform to use.
         platform (str): The platform to use.
-        stability_api (Optional[client.StabilityInference], optional): The
-        stability interface. Defaults to None.
-
-    Raises:
-        ValueError: If `platform == stability` and `not stability_api`
-        ValueError: If the request activated the API's safety filters
-        ValueError: If `platform == clipdrop` and `not api_keys.clipdrop`.
-        ValueError: If `platform` is invalid.
-        Exception: If there was some unknown error.
 
     Returns:
         io.BytesIO: The virtual image file.
@@ -944,11 +1063,13 @@ def image_generation_request(
 
 
 def generate(
+    text_generation_service: str = "openai",
     text_model: str = "gpt-4",
     temperature: float = 1.0,
-    basic_instructions: str = "You will create funny memes that are clever and"
-    " original, and not cliche or lame.",
-    image_special_instructions: str = "The images should be photographic.",
+    basic_instructions: str = "You should come up with some random funny memes"
+    " that are clever and original, and not cliche or lame.",
+    image_special_instructions: str = "The images should be photographic and"
+    " related to the meme.",
     user_entered_prompt: str = "anything",
     meme_count: int = 1,
     image_platform: str = "openai",
@@ -965,14 +1086,15 @@ def generate(
     Generate the memes.
 
     Args:
+        text_generation_service (str, optional): The text generation
+        service/platform to use. Defaults to "openai".
         text_model (str, optional): The text model to use. Defaults to "gpt-4".
         temperature (float, optional): The temperature (randomness). Defaults
         to 1.0.
-        basic_instructions (str, optional): The basic instructions. Defaults
-        to "You will create funny memes that are clever and"" original, and not
-        cliche or lame.".
+        basic_instructions (str, optional): The basic instructions. Has
+        default.
         image_special_instructions (str, optional): The image special
-        instructions. Defaults to "The images should be photographic.".
+        instructions. Has default.
         user_entered_prompt (str, optional): The user entered prompt. Defaults
         to "anything".
         meme_count (int, optional): The amount of memes to generate. Defaults
@@ -1026,6 +1148,22 @@ under certain conditions.
     # Check if any settings arguments, and replace the default values with the
     # args if so. To run automated from command line, specify at least 1
     # argument.
+    if (
+        hasattr(args, "text_generation_service")
+        and args.text_generation_service
+    ):
+        text_generation_service = args.text_generation_service
+        termcolor.cprint(
+            f"Text generation service will be {text_generation_service} from"
+            " cli arguments",
+            "cyan",
+        )
+    if hasattr(args, "text_model") and args.text_model:
+        text_model = args.text_model
+        termcolor.cprint(
+            f"Text model will be {text_model} from cli arguments",
+            "cyan",
+        )
     if hasattr(args, "image_platform") and args.image_platform:
         image_platform = args.image_platform
         termcolor.cprint(
@@ -1071,6 +1209,9 @@ under certain conditions.
     use_config = settings.get("advanced", {}).get("use_this_config", True)
     if use_config:
         termcolor.cprint("Getting settings from config file...", "cyan")
+        text_generation_service = settings.get("ai_settings", {}).get(
+            "text_generation_service", text_generation_service
+        )
         text_model = settings.get("ai_settings", {}).get(
             "text_model", text_model
         )
@@ -1113,16 +1254,6 @@ under certain conditions.
     else:
         api_keys = get_api_keys(args, no_user_input)
 
-    openai_instance = OpenAIText(
-        user_entered_prompt=user_entered_prompt,
-        basic_instructions=basic_instructions,
-        image_special_instructions=image_special_instructions,
-        api_key=api_keys.openai_key,
-        text_model=text_model,
-        temperature=temperature,
-    )
-    openai_instance.initialize()
-
     if not no_user_input:
         # If no user prompt argument set, get user input for prompt
         if hasattr(args, "user_prompt") and args.user_prompt:
@@ -1157,7 +1288,15 @@ under certain conditions.
 
     def single_meme_generation_loop() -> Optional[FullMeme]:
         # Send request to chat bot to generate meme text and image prompt
-        chat_response = openai_instance.generate_response()
+        chat_response = text_generation_request(
+            api_keys=api_keys,
+            user_entered_prompt=user_entered_prompt,
+            basic_instructions=basic_instructions,
+            image_special_instructions=image_special_instructions,
+            platform=text_generation_service,
+            text_model=text_model,
+            temperature=temperature,
+        )
 
         # Take chat message and convert to dictionary with meme_text and
         # image_prompt
@@ -1228,12 +1367,12 @@ under certain conditions.
                         "WARNING: Skipping this meme...", "yellow"
                     )
                     break
-                task = input("Abort, retry, skip? [A/r/s] ").lower()
+                task = input("Skip, abort, retry? [S/a/r] ").lower()
+                if task == "a":
+                    sys.exit(1)
                 if task == "r":
                     continue
-                if task == "s":
-                    break
-                sys.exit(1)
+                break
 
             # Add meme info dict to list of meme results
             if meme_info_dict:

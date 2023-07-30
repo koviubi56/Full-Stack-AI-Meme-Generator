@@ -4,3 +4,4 @@ stability-sdk>=0.8.3
 tomli; python_version<'3.11'
 termcolor
 colorama
+gpt4all
