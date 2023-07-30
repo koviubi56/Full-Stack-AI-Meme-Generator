@@ -64,6 +64,35 @@ DEFAULT_SETTINGS_FILE_NAME = "settings_default.toml"
 API_KEYS_FILE_NAME = "api_keys.toml"
 DEFAULT_API_KEYS_FILE_NAME = "api_keys_empty.toml"
 
+FORMAT_INSTRUCTIONS = (
+    "You are a meme generator with the following formatting instructions."
+    " Each meme will consist of text that will appear at the top, and an"
+    " image to go along with it. The user will send you a message with a"
+    " general theme or concept on which you will base the meme. The user"
+    ' may choose to send you a text saying something like "anything" or'
+    ' "whatever you want", or even no text at all, which you should not'
+    " take literally, but take to mean they wish for you to come up with"
+    " something yourself.  The memes don't necessarily need to start with"
+    ' "when", but they can. In any case, you will respond with two things:'
+    " First, the text of the meme that will be displayed in the final"
+    " meme. Second, some text that will be used as an image prompt for an"
+    " AI image generator to generate an image to also be used as part of"
+    " the meme. You must respond only in the format as described next,"
+    " because your response will be parsed, so it is important it conforms"
+    ' to the format. The first line of your response should be: "Meme'
+    ' Text: " followed by the meme text. The second line of your response'
+    ' should be: "Image Prompt: " followed by the image prompt text.  ---'
+    " Now here are additional instructions... "
+    "Next are instructions for the overall approach you should take to"
+    " creating the memes. Interpret as best as possible:"
+    " {} | "
+    "Next are any special instructions for the image prompt. For example,"
+    ' if the instructions are "the images should be photographic style",'
+    ' your prompt may append ", photograph" at the end, or begin with'
+    ' "photograph of". It does not have to literally match the instruction'
+    " but interpret as best as possible: {} | Now come up with a meme"
+    " according to the previous instructions! "
+)
 
 # =============================================================================
 
@@ -383,16 +412,7 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
             " instead.",
             "yellow",
         )
-        settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
-
-    # If something went wrong and empty settings, will use default settings
-    if settings == {}:
-        termcolor.cprint(
-            "ERROR: Something went wrong reading the settings file. Using"
-            " default settings instead.",
-            "red",
-        )
-        settings = get_config(get_assets_file(DEFAULT_SETTINGS_FILE_NAME))
+        settings = {}
 
     termcolor.cprint(f"Config will be {settings}", "black")
     return settings
@@ -452,8 +472,7 @@ def get_api_keys(
             "Please add your API keys to the API Keys file.",
             "cyan",
         )
-        if not no_user_input:
-            input("Press Enter to exit...")
+        input("Press Enter to exit...")
         sys.exit(1)
     termcolor.cprint(
         "ERROR: Could not get the API keys from neither the function"
@@ -602,43 +621,8 @@ def construct_system_prompt(
     Returns:
         str: The system prompt.
     """
-    format_instructions = (
-        "You are a meme generator with the following formatting instructions."
-        " Each meme will consist of text that will appear at the top, and an"
-        " image to go along with it. The user will send you a message with a"
-        " general theme or concept on which you will base the meme. The user"
-        ' may choose to send you a text saying something like "anything" or'
-        ' "whatever you want", or even no text at all, which you should not'
-        " take literally, but take to mean they wish for you to come up with"
-        " something yourself.  The memes don't necessarily need to start with"
-        ' "when", but they can. In any case, you will respond with two things:'
-        " First, the text of the meme that will be displayed in the final"
-        " meme. Second, some text that will be used as an image prompt for an"
-        " AI image generator to generate an image to also be used as part of"
-        " the meme. You must respond only in the format as described next,"
-        " because your response will be parsed, so it is important it conforms"
-        ' to the format. The first line of your response should be: "Meme'
-        ' Text: " followed by the meme text. The second line of your response'
-        ' should be: "Image Prompt: " followed by the image prompt text.  ---'
-        " Now here are additional instructions... "
-    )
-    basic_instruction_append = (
-        "Next are instructions for the overall approach you should take to"
-        " creating the memes. Interpret as best as possible:"
-        f" {basic_instructions} | "
-    )
-    special_instructions_append = (
-        "Next are any special instructions for the image prompt. For example,"
-        ' if the instructions are "the images should be photographic style",'
-        ' your prompt may append ", photograph" at the end, or begin with'
-        ' "photograph of". It does not have to literally match the instruction'
-        f" but interpret as best as possible: {image_special_instructions}"
-    )
-
-    return (
-        format_instructions
-        + basic_instruction_append
-        + special_instructions_append
+    return FORMAT_INSTRUCTIONS.format(
+        basic_instructions, image_special_instructions
     )
 
 
@@ -1032,39 +1016,42 @@ under certain conditions.
     # Check if any settings arguments, and replace the default values with the
     # args if so. To run automated from command line, specify at least 1
     # argument.
-    if args.image_platform:
+    if hasattr(args, "image_platform") and args.image_platform:
         image_platform = args.image_platform
         termcolor.cprint(
             f"Image platform will be {image_platform} from cli arguments",
             "cyan",
         )
-    if args.temperature:
+    if hasattr(args, "temperature") and args.temperature:
         temperature = float(args.temperature)
         termcolor.cprint(
             f"Temperature will be {temperature} from cli arguments",
             "cyan",
         )
-    if args.basic_instructions:
+    if hasattr(args, "basic_instructions") and args.basic_instructions:
         basic_instructions = args.basic_instructions
         termcolor.cprint(
             f"Basic instructions will be {basic_instructions} from cli"
             " arguments",
             "cyan",
         )
-    if args.image_special_instructions:
+    if (
+        hasattr(args, "image_special_instructions")
+        and args.image_special_instructions
+    ):
         image_special_instructions = args.image_special_instructions
         termcolor.cprint(
             f"Image special instructions will be {image_special_instructions}"
             " from cli arguments",
             "cyan",
         )
-    if args.no_file_save:
+    if hasattr(args, "no_file_save") and args.no_file_save:
         no_file_save = True
         termcolor.cprint(
             "Won't save file according to cli arguments",
             "cyan",
         )
-    if args.no_user_input:
+    if hasattr(args, "no_user_input") and args.no_user_input:
         no_user_input = True
         termcolor.cprint(
             "Won't ask for user input according to cli arguments",
@@ -1130,7 +1117,7 @@ under certain conditions.
 
     if not no_user_input:
         # If no user prompt argument set, get user input for prompt
-        if args.user_prompt:
+        if hasattr(args, "user_prompt") and args.user_prompt:
             user_entered_prompt = args.user_prompt
         else:
             print(
@@ -1144,7 +1131,7 @@ under certain conditions.
                 user_entered_prompt = "anything"
 
         # If no meme count argument set, get user input for meme count
-        if args.meme_count:
+        if hasattr(args, "meme_count") and args.meme_count:
             meme_count = int(args.meme_count)
         else:
             # Set the number of memes to create

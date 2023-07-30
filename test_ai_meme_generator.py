@@ -23,7 +23,7 @@ import io
 import pathlib
 import sys
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -35,14 +35,6 @@ IMAGE_PROMPT = "The letter H"
 AI_RESPONSE = f"Meme Text: {MEME_TEXT}\nImage Prompt: {IMAGE_PROMPT}"
 TEST_IMAGE = pathlib.Path(__file__, "..", "test_image.png").resolve()
 TEST_FULL_MEME = "test_full_meme_{}.png"
-
-
-def mock_initialize_api_clients(
-    api_keys: AIMemeGenerator.APIKeys, image_platform: str
-) -> Optional[Any]:
-    if api_keys.stability_key and image_platform.lower() == "stability":
-        return object()
-    return None
 
 
 def mock_set_file_path(
@@ -88,6 +80,8 @@ def do_test_generate(
     image_platform: str,
     use_config: bool,
     use_api_keys_file: bool,
+    use_cli_arguments: bool,
+    no_user_input: bool,
 ) -> None:
     font = get_font()
     monkeypatch.chdir(tmp_path)
@@ -103,12 +97,14 @@ stabilityai =\
             encoding="utf-8",
         )
         kwargs = {}
-    else:
+    elif not use_cli_arguments:
         kwargs = {
             "openai_key": api_keys.openai_key,
             "stability_key": api_keys.stability_key,
             "clipdrop_key": api_keys.clipdrop_key,
         }
+    else:
+        kwargs = {}
     with monkeypatch.context() as monkey:
         mock_message = MagicMock()
         mock_message.choices[0].message.content = AI_RESPONSE
@@ -206,12 +202,51 @@ stabilityai =\
                 Mock(return_value=io.BytesIO(b"")),
             )
 
+        # ---
+
+        if not no_user_input:
+            mock_input = Mock(
+                side_effect=lambda prompt: "" if ">" in prompt else "n"
+            )
+            monkey.setattr(AIMemeGenerator, "input", mock_input, raising=False)
+
+        if use_cli_arguments:
+
+            class Parser:
+                @staticmethod
+                def parse_args(
+                    *_, **__  # noqa: ANN002, ANN003
+                ) -> argparse.Namespace:
+                    return argparse.Namespace(
+                        image_platform=image_platform,
+                        openai_key=api_keys.openai_key,
+                        clipdrop_key=api_keys.clipdrop_key,
+                        stability_key=api_keys.stability_key,
+                        temperature=1.0,
+                        basic_instructions="You will create funny memes that"
+                        " are clever and original, and not cliche or lame.",
+                        image_special_instructions="The images should be"
+                        " photographic.",
+                        no_file_save=False,
+                        no_user_input=no_user_input,
+                        user_prompt="anything",
+                        meme_count=1,
+                    )
+
+            monkey.setattr(AIMemeGenerator, "parser", Parser)
+        else:
+            kwargs["no_user_input"] = no_user_input
         if use_config:
+            image_platform_string = (
+                ""
+                if use_cli_arguments
+                else f"image_platform = {image_platform!r}"
+            )
             font_line = f"font_file = '{font.resolve()}'" if font else ""
             pathlib.Path(AIMemeGenerator.SETTINGS_FILE_NAME).write_text(
                 f"""
 [ai_settings]
-image_platform = {image_platform!r}
+{image_platform_string}
 [advanced]
 {font_line}
 output_directory = '{pathlib.Path().cwd().resolve()}'
@@ -224,17 +259,16 @@ use_this_config = true
                 pathlib.Path(AIMemeGenerator.SETTINGS_FILE_NAME).read_text(),
             )
             if use_api_keys_file:
-                memes = AIMemeGenerator.generate(no_user_input=True)
+                memes = AIMemeGenerator.generate(no_user_input=no_user_input)
             else:
                 memes = AIMemeGenerator.generate(
-                    no_user_input=True,
                     **kwargs,
                 )
         else:
+            if not use_cli_arguments:
+                kwargs["image_platform"] = image_platform
             memes = AIMemeGenerator.generate(
                 output_directory=pathlib.Path.cwd().resolve(),
-                image_platform=image_platform,
-                no_user_input=True,
                 font_file_name=str(font),
                 **kwargs,
             )
@@ -297,11 +331,23 @@ def do_test_generate_four_times(
     api_keys: AIMemeGenerator.APIKeys,
     image_platform: str,
 ) -> None:
-    for config, keys in [
-        (True, True),
-        (True, False),
-        (False, True),
-        (False, False),
+    for config, keys, cli, no_input in [
+        (False, False, False, False),
+        (False, False, False, True),
+        (False, False, True, False),
+        (False, False, True, True),
+        (False, True, False, False),
+        (False, True, False, True),
+        (False, True, True, False),
+        (False, True, True, True),
+        (True, False, False, False),
+        (True, False, False, True),
+        (True, False, True, False),
+        (True, False, True, True),
+        (True, True, False, False),
+        (True, True, False, True),
+        (True, True, True, False),
+        (True, True, True, True),
     ]:
         do_test_generate(
             tmp_path=tmp_path_factory.mktemp("tmp"),
@@ -310,6 +356,8 @@ def do_test_generate_four_times(
             image_platform=image_platform,
             use_config=config,
             use_api_keys_file=keys,
+            use_cli_arguments=cli,
+            no_user_input=no_input,
         )
 
 
@@ -347,23 +395,35 @@ def test_generate_openai_plus_stability(
 
 
 def test_get_api_keys(
-    tmp_path_factory: pytest.TempPathFactory,
+    tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with monkeypatch.context() as monkey:
-        monkey.chdir(tmp_path_factory.mktemp("tmp"))
-        with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
-            AIMemeGenerator.get_api_keys(no_user_input=True)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(AIMemeGenerator.MissingAPIKeyError):
+        AIMemeGenerator.get_api_keys(no_user_input=True)
 
-        monkey.chdir(tmp_path_factory.mktemp("tmp"))
-        assert AIMemeGenerator.get_api_keys(
-            args=argparse.Namespace(
-                openai_key="openai",
-                stability_key="stability",
-                clipdrop_key="clipdrop",
-            ),
-            no_user_input=True,
-        ) == AIMemeGenerator.APIKeys("openai", "clipdrop", "stability")
+    with monkeypatch.context() as monkey:
+        input_monkey = Mock(return_value="")
+        monkey.setattr(AIMemeGenerator, "input", input_monkey, raising=False)
+        with pytest.raises(SystemExit):
+            AIMemeGenerator.get_api_keys(no_user_input=False)
+        assert (
+            pathlib.Path(
+                tmp_path, AIMemeGenerator.API_KEYS_FILE_NAME
+            ).read_bytes()
+            == AIMemeGenerator.get_assets_file(
+                AIMemeGenerator.DEFAULT_API_KEYS_FILE_NAME
+            ).read_bytes()
+        )
+
+    assert AIMemeGenerator.get_api_keys(
+        args=argparse.Namespace(
+            openai_key="openai",
+            stability_key="stability",
+            clipdrop_key="clipdrop",
+        ),
+        no_user_input=True,
+    ) == AIMemeGenerator.APIKeys("openai", "clipdrop", "stability")
 
 
 def test_validate_api_keys() -> None:
@@ -473,3 +533,46 @@ def test_validate_api_keys() -> None:
         ),
         "stability",
     )
+
+
+def test_check_font() -> None:
+    with pytest.raises(AIMemeGenerator.NoFontFileError):
+        AIMemeGenerator.check_font("_doesnt_exist")
+
+
+def test_get_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert AIMemeGenerator.get_settings(True) == {}
+
+    # ---
+
+    with monkeypatch.context() as monkey:
+        input_mock = Mock(return_value="")
+        monkey.setattr(AIMemeGenerator, "input", input_mock, raising=False)
+
+        assert AIMemeGenerator.get_settings(
+            False
+        ) == AIMemeGenerator.tomllib.loads(
+            AIMemeGenerator.get_assets_file(
+                AIMemeGenerator.DEFAULT_SETTINGS_FILE_NAME
+            ).read_text(encoding="utf-8")
+        )
+
+    # ---
+
+    pathlib.Path(AIMemeGenerator.SETTINGS_FILE_NAME).write_text(
+        "invalid syntax :(", encoding="utf-8"
+    )
+
+    assert AIMemeGenerator.get_settings(True) == {}
+    assert AIMemeGenerator.get_settings(False) == {}
+
+
+def test_image_generation_request() -> None:
+    with pytest.raises(AIMemeGenerator.InvalidImagePlatformError):
+        AIMemeGenerator.image_generation_request(
+            AIMemeGenerator.APIKeys("", None, None), "", "_doesnt_exist"
+        )
