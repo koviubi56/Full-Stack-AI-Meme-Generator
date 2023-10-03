@@ -558,13 +558,9 @@ class GPT4AllText(TextABC):
             )
         termcolor.cprint(
             "WARNING! By using GPT4All an ~8 GB AI model will be downloaded"
-            " (will be cached at ~/.cache)! Running it requires* ~8 GB of RAM,"
-            " and it can be ~2 minutes/meme!"
+            " (will be cached at ~/.cache)!"
             "\nProceed with caution, press CTRL+C to abort!",
             "yellow",
-        )
-        termcolor.cprint(
-            "*: The AI model runs decently on 4 GB of RAM.", "cyan"
         )
         _model_start = time.perf_counter()
         self.model = GPT4All(model_name=self.text_model)
