@@ -1299,7 +1299,7 @@ under certain conditions.
             )
             try:
                 meme_info_dict = single_meme_generation_loop()
-            except Exception:  # noqa: PERF203
+            except Exception:
                 termcolor.cprint("Error while generating the meme:", "red")
                 if no_user_input:
                     raise
