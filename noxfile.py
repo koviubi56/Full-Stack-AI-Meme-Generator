@@ -31,8 +31,8 @@ def test_coverage(session: nox.Session) -> None:
         "--code-highlight=yes",
         "--continue-on-collection-errors",
     )
-    if os.name == "nt":
-        raise RuntimeError("cannot upload coverage results on Windows")
+    if os.getenv("RUNNER_OS") != "Linux":
+        raise RuntimeError("can only upload coverage results on Linux")
     session.run(
         "curl",
         "-O",
