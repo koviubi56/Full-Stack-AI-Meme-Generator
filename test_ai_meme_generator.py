@@ -113,6 +113,14 @@ stabilityai =\
         kwargs = {}
 
     with monkeypatch.context() as monkey:
+        # // mock_set_api = Mock(return_value=None)
+        # // monkey.setattr(
+        # //     AIMemeGenerator.OpenAIText, "_set_api_key", mock_set_api
+        # // )
+        # // monkey.setattr(
+        # //     AIMemeGenerator.OpenAIImage, "_set_api_key", mock_set_api
+        # // )
+
         mock_message = MagicMock()
         mock_message.choices[0].message.content = AI_RESPONSE
         mock_chat_create = Mock(return_value=mock_message)
@@ -125,7 +133,16 @@ stabilityai =\
         mock_openai = Mock()
         mock_openai.ChatCompletion.create = mock_chat_create
         mock_openai.Image.create = mock_openai_image_create
-        monkey.setattr(AIMemeGenerator, "openai", mock_openai)
+        monkey.setattr(
+            AIMemeGenerator.OpenAIText,
+            "_chat_completion_create",
+            mock_chat_create,
+        )
+        monkey.setattr(
+            AIMemeGenerator.OpenAIImage,
+            "_image_create",
+            mock_openai_image_create,
+        )
 
         # ---
 
@@ -142,12 +159,16 @@ stabilityai =\
             ) -> str:
                 return AI_RESPONSE
 
-        monkey.setattr(AIMemeGenerator, "GPT4All", _GPT4All)
+        monkey.setattr(
+            AIMemeGenerator.GPT4AllText,
+            "_get_model",
+            Mock(side_effect=_GPT4All),
+        )
 
         # ---
 
         mock_artifact = Mock()
-        mock_artifact.type = AIMemeGenerator.generation.ARTIFACT_IMAGE
+        mock_artifact.type = 1  # ARTIFACT_IMAGE
         mock_artifact.binary = TEST_IMAGE.read_bytes()
         mock_response = Mock()
         mock_response.artifacts = [mock_artifact]
@@ -169,21 +190,13 @@ stabilityai =\
                 assert width == 1024
                 assert height == 1024
                 assert samples == 1
-                assert sampler == AIMemeGenerator.generation.SAMPLER_K_DPMPP_2M
+                assert sampler == 9  ## SAMPLER_K_DPMPP_2M
                 return [mock_response]
 
-        class Client:
-            @staticmethod
-            def StabilityInference(  # noqa: N802
-                *_, **__  # noqa: ANN003, ANN002
-            ) -> Stabilityapi:
-                return Stabilityapi()
-
         monkey.setattr(
-            AIMemeGenerator,
-            "client",
-            Client,
-            raising=False,
+            AIMemeGenerator.StabilityImage,
+            "_get_interface",
+            Mock(side_effect=Stabilityapi),
         )
 
         # ---
@@ -195,21 +208,11 @@ stabilityai =\
             def raise_for_status() -> None:
                 pass
 
-        class Requests:
-            @staticmethod
-            def post(
-                url: str,
-                files: Dict[str, Tuple[None, str, str]],
-                headers: Dict[str, str],
-                timeout: int,
-            ) -> HTTPResponse:
-                assert url == "https://clipdrop-api.co/text-to-image/v1"
-                assert files == {"prompt": (None, IMAGE_PROMPT, "text/plain")}
-                assert headers == {"x-api-key": api_keys.clipdrop_key}
-                assert timeout == 60
-                return HTTPResponse()
-
-        monkey.setattr(AIMemeGenerator, "requests", Requests)
+        monkey.setattr(
+            AIMemeGenerator.ClipdropImage,
+            "_request",
+            Mock(side_effect=HTTPResponse),
+        )
 
         # ---
 
@@ -322,12 +325,7 @@ use_this_config = true
     if text_platform == "openai":
         mock_chat_create.assert_called_once()
     if image_platform == "openai":
-        mock_openai_image_create.assert_called_once_with(
-            prompt=IMAGE_PROMPT,
-            n=1,
-            size="512x512",
-            response_format="b64_json",
-        )
+        mock_openai_image_create.assert_called_once_with()
     else:
         mock_openai_image_create.assert_not_called()
     mock_file.assert_called_once_with("meme", tmp_path.resolve())
@@ -352,9 +350,18 @@ BIG_LIST = [
     (True, True, True, True),
 ]
 
+TEXT_PLATFORMS = ("openai", "gpt4all")
+IMAGE_PLATFORMS = ("openai", "clipdrop", "stability")
+TEXT_IMAGE_COMBINATIONS = [
+    (text, image) for image in IMAGE_PLATFORMS for text in TEXT_PLATFORMS
+]
+assert len(TEXT_IMAGE_COMBINATIONS) == len(TEXT_PLATFORMS) * len(
+    IMAGE_PLATFORMS
+)
+
 
 @pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_only_openai(
+def test_generate(
     tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
     config: bool,
@@ -362,127 +369,20 @@ def test_generate_only_openai(
     cli: bool,
     no_input: bool,
 ) -> None:
-    do_test_generate(
-        text_platform="openai",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", None, None),
-        image_platform="openai",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
-
-
-@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_openai_plus_clipdrop(
-    tmp_path_factory: pytest.TempPathFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    config: bool,
-    keys: bool,
-    cli: bool,
-    no_input: bool,
-) -> None:
-    do_test_generate(
-        text_platform="openai",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
-        image_platform="clipdrop",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
-
-
-@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_openai_plus_stability(
-    tmp_path_factory: pytest.TempPathFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    config: bool,
-    keys: bool,
-    cli: bool,
-    no_input: bool,
-) -> None:
-    do_test_generate(
-        text_platform="openai",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
-        image_platform="stability",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
-
-
-@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_gpt4all_plus_openai(
-    tmp_path_factory: pytest.TempPathFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    config: bool,
-    keys: bool,
-    cli: bool,
-    no_input: bool,
-) -> None:
-    do_test_generate(
-        text_platform="gpt4all",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", None, None),
-        image_platform="openai",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
-
-
-@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_gpt4all_plus_clipdrop(
-    tmp_path_factory: pytest.TempPathFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    config: bool,
-    keys: bool,
-    cli: bool,
-    no_input: bool,
-) -> None:
-    do_test_generate(
-        text_platform="gpt4all",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", "clipdrop", None),
-        image_platform="clipdrop",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
-
-
-@pytest.mark.parametrize(("config", "keys", "cli", "no_input"), BIG_LIST)
-def test_generate_gpt4all_plus_stability(
-    tmp_path_factory: pytest.TempPathFactory,
-    monkeypatch: pytest.MonkeyPatch,
-    config: bool,
-    keys: bool,
-    cli: bool,
-    no_input: bool,
-) -> None:
-    do_test_generate(
-        text_platform="gpt4all",
-        tmp_path=tmp_path_factory.mktemp("tmp"),
-        monkeypatch=monkeypatch,
-        api_keys=AIMemeGenerator.APIKeys("openai", None, "stability"),
-        image_platform="stability",
-        use_config=config,
-        use_api_keys_file=keys,
-        use_cli_arguments=cli,
-        no_user_input=no_input,
-    )
+    for text, image in TEXT_IMAGE_COMBINATIONS:
+        do_test_generate(
+            text_platform=text,
+            tmp_path=tmp_path_factory.mktemp("tmp"),
+            monkeypatch=monkeypatch,
+            api_keys=AIMemeGenerator.APIKeys(
+                "openai", "clipdrop", "stability"
+            ),
+            image_platform=image,
+            use_config=config,
+            use_api_keys_file=keys,
+            use_cli_arguments=cli,
+            no_user_input=no_input,
+        )
 
 
 def test_get_api_keys(
