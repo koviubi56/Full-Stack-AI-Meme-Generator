@@ -45,14 +45,7 @@ import traceback
 from typing import Any, Dict, Iterable, List, Literal, Optional, Union
 
 import colorama
-import openai
-import requests
-import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation
 import termcolor
-from gpt4all import GPT4All
-from openai.error import InvalidRequestError, RateLimitError
-from PIL import Image, ImageDraw, ImageFont
-from stability_sdk import client
 
 try:
     import tomllib  # novermin
@@ -459,16 +452,32 @@ class OpenAIText(TextABC):
     text_model: str
     temperature: float
 
+    def _set_api_key(self) -> None:
+        import openai
+
+        openai.api_key = self.api_key
+
     def initialize(self) -> None:
         if not self.api_key:
             raise MissingAPIKeyError("openai")
-        openai.api_key = self.api_key
+        self._set_api_key()
         system_prompt = construct_system_prompt(
             self.basic_instructions, self.image_special_instructions
         )
         self.conversation = [{"role": "system", "content": system_prompt}]
 
+    def _chat_completion_create(self) -> Any:
+        import openai
+
+        return openai.ChatCompletion.create(
+            model=self.text_model,
+            messages=self.conversation,
+            temperature=self.temperature,
+        )
+
     def generate_response(self) -> str:
+        from openai.error import InvalidRequestError, RateLimitError
+
         # Prepare to send request along with context by appending user message
         # to previous conversation
         self.conversation.append(
@@ -480,11 +489,7 @@ class OpenAIText(TextABC):
             "cyan",
         )
         try:
-            chat_response = openai.ChatCompletion.create(
-                model=self.text_model,
-                messages=self.conversation,
-                temperature=self.temperature,
-            )
+            chat_response = self._chat_completion_create()
         except RateLimitError:
             termcolor.cprint(
                 "\nERROR! See below hint and traceback!", "yellow"
@@ -542,6 +547,11 @@ class GPT4AllText(TextABC):
     text_model: str  # "ggml-model-gpt4all-falcon-q4_0.bin"
     temperature: float
 
+    def _get_model(self) -> Any:
+        from gpt4all import GPT4All
+
+        return GPT4All(model_name=self.text_model)
+
     def initialize(self) -> None:
         if self.text_model.startswith("gpt-"):
             termcolor.cprint(
@@ -563,7 +573,7 @@ class GPT4AllText(TextABC):
             "yellow",
         )
         _model_start = time.perf_counter()
-        self.model = GPT4All(model_name=self.text_model)
+        self.model = self._get_model()
         _model_end = time.perf_counter()
         termcolor.cprint(
             f"Initialized model in {_model_end - _model_start} seconds",
@@ -612,18 +622,28 @@ class ImageABC(abc.ABC):
 class OpenAIImage(ImageABC):
     api_key: str
 
+    def _set_api_key(self) -> None:
+        import openai
+
+        openai.api_key = self.api_key
+
     def initialize(self) -> None:
         if not self.api_key:
             raise MissingAPIKeyError("openai")
-        openai.api_key = self.api_key
+        self._set_api_key()
 
-    def generate_image(self) -> io.BytesIO:
-        openai_response = openai.Image.create(
+    def _image_create(self) -> Any:
+        import openai
+
+        return openai.Image.create(
             prompt=self.image_prompt,
             n=1,
             size="512x512",
             response_format="b64_json",
         )
+
+    def generate_image(self) -> io.BytesIO:
+        openai_response = self._image_create()
         # Convert image data to virtual file
         return io.BytesIO(
             base64.b64decode(openai_response["data"][0]["b64_json"])
@@ -634,16 +654,24 @@ class OpenAIImage(ImageABC):
 class StabilityImage(ImageABC):
     api_key: str
 
-    def initialize(self) -> None:
-        if not self.api_key:
-            raise MissingAPIKeyError("stability")
-        self.stability_api = client.StabilityInference(
+    def _get_interface(self) -> Any:
+        from stability_sdk import client
+
+        return client.StabilityInference(
             key=self.api_key,
             verbose=True,
             engine="stable-diffusion-xl-1024-v0-9",
         )
 
+    def initialize(self) -> None:
+        if not self.api_key:
+            raise MissingAPIKeyError("stability")
+
+        self.stability_api = self._get_interface()
+
     def generate_image(self) -> io.BytesIO:
+        import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation  # noqa: E501
+
         # Set up our initial generation parameters.
         stability_response = self.stability_api.generate(
             prompt=self.image_prompt,
@@ -678,13 +706,18 @@ class ClipdropImage(ImageABC):
         if not self.api_key:
             raise MissingAPIKeyError("clipdrop")
 
-    def generate_image(self) -> io.BytesIO:
-        r = requests.post(
+    def _request(self) -> Any:
+        import requests
+
+        return requests.post(
             "https://clipdrop-api.co/text-to-image/v1",
             files={"prompt": (None, self.image_prompt, "text/plain")},
             headers={"x-api-key": self.api_key},
             timeout=60,
         )
+
+    def generate_image(self) -> io.BytesIO:
+        r = self._request()
         r.raise_for_status()
         return io.BytesIO(r.content)
 
@@ -849,6 +882,7 @@ def create_meme(
         io.BytesIO: The virtual image file.
     """
     termcolor.cprint("  Creating meme image...", "cyan")
+    from PIL import Image, ImageDraw, ImageFont
 
     # Load the image. Can be a path or a file-like object such as IO.BytesIO
     # virtual file
