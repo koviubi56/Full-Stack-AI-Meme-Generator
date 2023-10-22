@@ -1,3 +1,4 @@
+aiohttp>=3.9.0b0; python_version>='3.12'  # indirect dependency, temporary solution, see <https://github.com/aio-libs/aiohttp/issues/7739#issuecomment-1773868351>
 openai>=0.27.8
 pillow>=10.0.0
 stability-sdk>=0.8.3
