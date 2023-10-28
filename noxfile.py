@@ -32,7 +32,7 @@ def test_coverage(session: nox.Session) -> None:
         "--continue-on-collection-errors",
     )
     if os.getenv("RUNNER_OS") != "Linux":
-        print("can only upload coverage results on Linux")
+        session.warn("can only upload coverage results on Linux")
         return
     session.run(
         "curl",

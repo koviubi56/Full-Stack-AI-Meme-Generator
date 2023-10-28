@@ -1,25 +1,27 @@
+select = ["ALL"]
 ignore = [
     "ANN101",
     "ANN102",
-    "ANN401",
-    "BLE001",
-    "C",
     "COM812",
-    "D",
-    "EM101",
-    "EM102",
-    "EXE",
-    "FA",
+    "D105",
+    "D212",
+    "EM",
+    "FA100",
     "FBT",
-    "T",
-    "TRY",
-    "PLR0911",
-    "PLR0912",
+    "TRY003",
+]
+per-file-ignores = { "test_*.py" = [
+    "C901",
+    "D",
     "PLR0913",
     "PLR0915",
-]
-per-file-ignores = { "test_*.py" = ["PLR2004", "S101"] }
-select = ["ALL"]
+    "PLR2004",
+    "S101",
+], "noxfile.py" = [
+    "D",
+], "AIMemeGenerator.py" = [
+    "T201",
+] }
 line-length = 79
 target-version = "py38"
 
@@ -58,3 +60,7 @@ fixable = [
 
 [flake8-quotes]
 inline-quotes = "double"
+
+[pydocstyle]
+convention = "google"
+ignore-decorators = ["typing.overload"]

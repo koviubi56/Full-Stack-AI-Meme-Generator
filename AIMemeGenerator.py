@@ -49,7 +49,7 @@ import termcolor
 
 try:
     import tomllib  # novermin
-except Exception:
+except Exception:  # noqa: BLE001
     import tomli as tomllib
 
 colorama.init()
@@ -297,6 +297,8 @@ def search_for_file_in_directories(
 
 def check_font(font_file_name: str) -> pathlib.Path:
     """
+    Get the font.
+
     Check for font file in current directory, then check for font file in Fonts
     folder, warn user and exit if not found.
 
@@ -362,7 +364,7 @@ def get_config(
 
 def get_assets_file(file_name: str) -> pathlib.Path:
     """
-    Get `assets/file_name`
+    Get `assets/file_name`.
 
     Args:
         file_name (str): The file's name.
@@ -412,7 +414,7 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
     # Try to get settings file, if fails, use default settings
     try:
         settings = get_config(file)
-    except Exception:
+    except Exception:  # noqa: BLE001
         termcolor.cprint(traceback.format_exc(), "yellow")
         termcolor.cprint(
             "WARNING: Could not read settings file. Using default settings"
@@ -427,20 +429,40 @@ def get_settings(no_user_input: bool) -> Dict[str, Dict[str, Any]]:
 
 @dataclasses.dataclass
 class TextABC(abc.ABC):
+    """ABC for text generation services."""
+
     user_entered_prompt: str
     basic_instructions: str
     image_special_instructions: str
 
     @abc.abstractmethod
     def generate_response(self) -> str:
+        """
+        Generate the response. Must be overwritten by a subclass.
+
+        Raises:
+            NotImplementedError: If the subclass didn't implement this.
+
+        Returns:
+            str: The response.
+        """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def initialize(self) -> None:
-        return  # kinda optional; not gonna raise
+        """Initialize. May be overwritten by a subclass."""
+        return
 
     @classmethod
-    def create_initialize_and_generate(cls, **kwargs: Any) -> str:
+    def create_initialize_and_generate(
+        cls,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> str:
+        """
+        Create and initialize the object, and generate the response.
+
+        Returns:
+            str: The response.
+        """
         instance = cls(**kwargs)
         instance.initialize()
         return instance.generate_response()
@@ -448,6 +470,8 @@ class TextABC(abc.ABC):
 
 @dataclasses.dataclass
 class OpenAIText(TextABC):
+    """OpenAI text generation service."""
+
     api_key: str
     text_model: str
     temperature: float
@@ -458,6 +482,7 @@ class OpenAIText(TextABC):
         openai.api_key = self.api_key
 
     def initialize(self) -> None:
+        """Initialize; check and set the API key, and get the system prompt."""
         if not self.api_key:
             raise MissingAPIKeyError("openai")
         self._set_api_key()
@@ -466,7 +491,7 @@ class OpenAIText(TextABC):
         )
         self.conversation = [{"role": "system", "content": system_prompt}]
 
-    def _chat_completion_create(self) -> Any:
+    def _chat_completion_create(self) -> Any:  # noqa: ANN401
         import openai
 
         return openai.ChatCompletion.create(
@@ -476,6 +501,12 @@ class OpenAIText(TextABC):
         )
 
     def generate_response(self) -> str:
+        """
+        Generate the response.
+
+        Returns:
+            str: The response.
+        """
         from openai.error import InvalidRequestError, RateLimitError
 
         # Prepare to send request along with context by appending user message
@@ -544,15 +575,18 @@ class OpenAIText(TextABC):
 
 @dataclasses.dataclass
 class GPT4AllText(TextABC):
+    """GPT4All text generation service."""
+
     text_model: str  # "ggml-model-gpt4all-falcon-q4_0.bin"
     temperature: float
 
-    def _get_model(self) -> Any:
+    def _get_model(self) -> Any:  # noqa: ANN401
         from gpt4all import GPT4All
 
         return GPT4All(model_name=self.text_model)
 
     def initialize(self) -> None:
+        """Initialize; check and download the text model."""
         if self.text_model.startswith("gpt-"):
             termcolor.cprint(
                 "WARNING: It looks like you forgot to change the text_model in"
@@ -581,6 +615,12 @@ class GPT4AllText(TextABC):
         )
 
     def generate_response(self) -> str:
+        """
+        Generate the response.
+
+        Returns:
+            str: The response.
+        """
         termcolor.cprint(
             "Generating meme text, please wait ~2 minutes...", "black"
         )
@@ -601,18 +641,41 @@ class GPT4AllText(TextABC):
 
 @dataclasses.dataclass
 class ImageABC(abc.ABC):
+    """ABC for image generation services."""
+
     image_prompt: str
 
     @abc.abstractmethod
     def generate_image(self) -> io.BytesIO:
+        """
+        Generate the image. Must be overwritten by a subclass.
+
+        Raises:
+            NotImplementedError: If the subclass hasn't implemented it.
+
+        Returns:
+            io.BytesIO: The image's bytes.
+        """
         raise NotImplementedError
 
-    @abc.abstractmethod
     def initialize(self) -> None:
-        return  # kinda optional; not gonna raise
+        """Initialize. May be overwritten by a subclass."""
+        return
 
     @classmethod
-    def create_initialize_and_generate(cls, **kwargs: Any) -> io.BytesIO:
+    def create_initialize_and_generate(
+        cls,
+        **kwargs: Any,  # noqa: ANN401
+    ) -> io.BytesIO:
+        """
+        Create and initialize the object, and generate the image.
+
+        Args:
+            **kwargs (Any): The keyword arguments to `cls()`
+
+        Returns:
+            io.BytesIO: The image's bytes.
+        """
         instance = cls(**kwargs)
         instance.initialize()
         return instance.generate_image()
@@ -620,6 +683,8 @@ class ImageABC(abc.ABC):
 
 @dataclasses.dataclass
 class OpenAIImage(ImageABC):
+    """OpenAI image generation service."""
+
     api_key: str
 
     def _set_api_key(self) -> None:
@@ -628,11 +693,17 @@ class OpenAIImage(ImageABC):
         openai.api_key = self.api_key
 
     def initialize(self) -> None:
+        """
+        Initialize; check and set the API key.
+
+        Raises:
+            MissingAPIKeyError: If the API key is missing.
+        """
         if not self.api_key:
             raise MissingAPIKeyError("openai")
         self._set_api_key()
 
-    def _image_create(self) -> Any:
+    def _image_create(self) -> Any:  # noqa: ANN401
         import openai
 
         return openai.Image.create(
@@ -643,6 +714,12 @@ class OpenAIImage(ImageABC):
         )
 
     def generate_image(self) -> io.BytesIO:
+        """
+        Generate the image.
+
+        Returns:
+            io.BytesIO: The image's bytes.
+        """
         openai_response = self._image_create()
         # Convert image data to virtual file
         return io.BytesIO(
@@ -652,9 +729,11 @@ class OpenAIImage(ImageABC):
 
 @dataclasses.dataclass
 class StabilityImage(ImageABC):
+    """Stability image generation service."""
+
     api_key: str
 
-    def _get_interface(self) -> Any:
+    def _get_interface(self) -> Any:  # noqa: ANN401
         from stability_sdk import client
 
         return client.StabilityInference(
@@ -664,12 +743,28 @@ class StabilityImage(ImageABC):
         )
 
     def initialize(self) -> None:
+        """
+        Initialize; check the api key, and initialize the interface.
+
+        Raises:
+            MissingAPIKeyError: If the API key is missing.
+        """
         if not self.api_key:
             raise MissingAPIKeyError("stability")
 
         self.stability_api = self._get_interface()
 
     def generate_image(self) -> io.BytesIO:
+        """
+        Generate the image.
+
+        Raises:
+            ValueError: Failed to generate image.
+            NotImplementedError: :skull:
+
+        Returns:
+            io.BytesIO: The image's bytes.
+        """
         import stability_sdk.interfaces.gooseai.generation.generation_pb2 as generation  # noqa: E501
 
         # Set up our initial generation parameters.
@@ -700,13 +795,21 @@ class StabilityImage(ImageABC):
 
 @dataclasses.dataclass
 class ClipdropImage(ImageABC):
+    """Clipdrop image generation service."""
+
     api_key: str
 
     def initialize(self) -> None:
+        """
+        Initialize; check the api key.
+
+        Raises:
+            MissingAPIKeyError: If the API key is missing.
+        """
         if not self.api_key:
             raise MissingAPIKeyError("clipdrop")
 
-    def _request(self) -> Any:
+    def _request(self) -> Any:  # noqa: ANN401
         import requests
 
         return requests.post(
@@ -717,6 +820,12 @@ class ClipdropImage(ImageABC):
         )
 
     def generate_image(self) -> io.BytesIO:
+        """
+        Generate the image.
+
+        Returns:
+            io.BytesIO: The image's bytes.
+        """
         r = self._request()
         r.raise_for_status()
         return io.BytesIO(r.content)
@@ -829,8 +938,7 @@ def construct_system_prompt(
 
 def parse_meme(message: str) -> Optional[Meme]:
     """
-    Gets the meme text and image prompt from the message sent by the chat
-    bot.
+    Gets the meme text and image prompt from the message sent by the bot.
 
     Args:
         message (str): The AI message.
@@ -854,7 +962,7 @@ def parse_meme(message: str) -> Optional[Meme]:
     return None
 
 
-def create_meme(
+def create_meme(  # noqa: PLR0913
     image_path: io.BytesIO,
     top_text: str,
     file_path: pathlib.Path,
@@ -969,7 +1077,7 @@ def create_meme(
     return virtual_meme_file
 
 
-def text_generation_request(
+def text_generation_request(  # noqa: PLR0913
     api_keys: APIKeys,
     user_entered_prompt: str,
     basic_instructions: str,
@@ -1049,7 +1157,7 @@ def image_generation_request(
     raise InvalidImagePlatformError(platform)
 
 
-def generate(
+def generate(  # noqa: C901, PLR0915, PLR0913, PLR0912
     text_generation_service: str = "openai",
     text_model: str = "gpt-4",
     temperature: float = 1.0,
@@ -1333,7 +1441,7 @@ under certain conditions.
             )
             try:
                 meme_info_dict = single_meme_generation_loop()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 termcolor.cprint("Error while generating the meme:", "red")
                 if no_user_input:
                     raise
@@ -1362,7 +1470,7 @@ under certain conditions.
 if __name__ == "__main__":
     try:
         generate()
-    except Exception:
+    except Exception as main_error:  # noqa: BLE001
         termcolor.cprint(traceback.format_exc(), "red")
         termcolor.cprint(
             "Please read the above error message! **If** you think this is a"
@@ -1372,7 +1480,7 @@ if __name__ == "__main__":
         )
         try:
             input("Press Enter to exit...")
-        except Exception:
+        except Exception:  # noqa: BLE001
             # If we can't use input (maybe we were ran in some automated system
             # that doesn't allow input) then just re-raise it
-            raise
+            raise main_error from None

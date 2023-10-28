@@ -48,7 +48,7 @@ def mock_set_file_path(
 def get_font() -> Optional[pathlib.Path]:
     try:
         return AIMemeGenerator.check_font("arial.ttf").resolve()
-    except Exception:
+    except Exception:  # noqa: BLE001
         path = pathlib.Path("/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf")
         if path.exists():
             return path.resolve()
@@ -242,7 +242,8 @@ stabilityai =\
             class Parser:
                 @staticmethod
                 def parse_args(
-                    *_, **__  # noqa: ANN002, ANN003
+                    *_,  # noqa: ANN002
+                    **__,  # noqa: ANN003
                 ) -> argparse.Namespace:
                     return argparse.Namespace(
                         text_generation_service=text_platform,
@@ -292,10 +293,6 @@ output_directory = '{pathlib.Path().cwd().resolve()}'
 use_this_config = true
 """,
                 encoding="utf-8",
-            )
-            print(
-                "cfg file",
-                pathlib.Path(AIMemeGenerator.SETTINGS_FILE_NAME).read_text(),
             )
             if use_api_keys_file:
                 memes = AIMemeGenerator.generate(no_user_input=no_user_input)
