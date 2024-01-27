@@ -1,4 +1,4 @@
-# Full Stack AI Meme Generator
+# Full Stack AI Meme Generator - Not maintained
 
 Allows you to automatically generate meme images from start to finish using AI. It will generate the text for the meme (optionally based on a user-provided concept), create a related image, and combine the two into a final image file.
 
